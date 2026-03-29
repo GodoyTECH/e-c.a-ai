@@ -91,9 +91,8 @@ export async function updateOrderStatus(
   reason?: string
 ) {
   const db = getDb();
-  await db.query('UPDATE orders SET status=$1, notes=COALESCE($3, notes), updated_at=NOW() WHERE id=$2', [
-    status,
-    orderId,
-    reason ?? null
-  ]);
+  await db.query(
+    'UPDATE orders SET status=$1, notes=COALESCE($3, notes), updated_at=NOW() WHERE id=$2',
+    [status, orderId, reason ?? null]
+  );
 }
