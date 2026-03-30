@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 const COOKIE_NAME = 'admin_session';
 
 export function getAdminPassword() {
-  return process.env.ADMIN_PASSWORD || 'admin123';
+  return process.env.ADMIN_PASSWORD || '0';
 }
 
 export async function isAdminAuthenticated() {
