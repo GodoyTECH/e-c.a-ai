@@ -1,7 +1,12 @@
 import { getDb } from '@/lib/db';
 import { Product, StoreSettings } from '@/lib/types';
+import { demoCategories, demoProducts, demoSettings } from '@/lib/demo-data';
 
 export async function listStoreData() {
+  if (!process.env.DATABASE_URL) {
+    return { categories: demoCategories, products: demoProducts, settings: demoSettings };
+  }
+
   const db = getDb();
   const categoriesRes = await db.query('SELECT id, name, slug, active FROM categories WHERE active = true ORDER BY name ASC');
   const productsRes = await db.query(
@@ -23,6 +28,8 @@ export async function listStoreData() {
 }
 
 export async function listAdminProducts() {
+  if (!process.env.DATABASE_URL) return demoProducts;
+
   const db = getDb();
   const res = await db.query(
     `SELECT p.*, c.name as category_name
@@ -108,6 +115,8 @@ export async function deleteProduct(id: string) {
 }
 
 export async function getStoreSettings() {
+  if (!process.env.DATABASE_URL) return demoSettings;
+
   const db = getDb();
   const res = await db.query(
     'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message FROM store_settings WHERE id=1'

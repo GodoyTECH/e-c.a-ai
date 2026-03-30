@@ -4,6 +4,29 @@ import { gerarLinkWhatsApp } from '@/lib/whatsapp';
 import { CheckoutPayload } from '@/types/order';
 
 export async function createOrder(payload: CheckoutPayload, idempotencyKey?: string) {
+  if (!process.env.DATABASE_URL) {
+    const subtotal = payload.items.reduce((acc, item) => acc + item.priceCents * item.quantity, 0);
+    const whatsappUrl = gerarLinkWhatsApp({
+      ownerNumber: '5511999999999',
+      order: {
+        customerName: payload.customerName,
+        customerPhone: payload.customerPhone,
+        orderType: payload.orderType,
+        address: payload.address || null,
+        notes: payload.notes || null,
+        subtotalCents: subtotal,
+        items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity })),
+        defaultMessage: 'Olá! Pedido criado em modo demonstração.'
+      }
+    });
+
+    return {
+      id: idempotencyKey || crypto.randomUUID(),
+      code: generateOrderCode(),
+      whatsappUrl
+    };
+  }
+
   const db = getDb();
   const client = await db.connect();
 
