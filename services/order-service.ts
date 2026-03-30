@@ -85,7 +85,7 @@ export async function listOrders() {
   return orders.rows;
 }
 
-export async function updateOrderStatus(orderId: string, status: 'confirmed' | 'rejected') {
+export async function updateOrderStatus(orderId: string, status: 'confirmed' | 'rejected', _reason?: string) {
   const db = getDb();
   await db.query('UPDATE orders SET status=$1, updated_at=NOW() WHERE id=$2', [status, orderId]);
 }
