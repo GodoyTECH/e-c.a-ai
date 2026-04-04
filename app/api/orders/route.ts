@@ -6,6 +6,7 @@ const schema = z.object({
   customerName: z.string().min(3),
   customerPhone: z.string().regex(/^\d{10,13}$/),
   orderType: z.enum(['delivery', 'pickup']),
+  paymentMethod: z.enum(['pix', 'credit_card', 'debit_card']),
   address: z.string().optional(),
   notes: z.string().optional(),
   items: z

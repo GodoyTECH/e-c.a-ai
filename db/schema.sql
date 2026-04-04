@@ -35,10 +35,15 @@ CREATE TABLE IF NOT EXISTS orders (
   customer_name TEXT NOT NULL,
   customer_phone TEXT NOT NULL,
   order_type TEXT NOT NULL CHECK (order_type IN ('delivery', 'pickup')),
+  payment_method TEXT NOT NULL DEFAULT 'pix' CHECK (payment_method IN ('pix', 'credit_card', 'debit_card')),
   address TEXT,
+  delivery_address TEXT,
   notes TEXT,
-  status TEXT NOT NULL CHECK (status IN ('pending_whatsapp','confirmed','rejected')),
+  status TEXT NOT NULL CHECK (status IN ('pending','confirmed','preparing','delivered','canceled','pending_whatsapp','rejected')),
   subtotal_cents INTEGER NOT NULL,
+  total_cents INTEGER NOT NULL DEFAULT 0,
+  whatsapp_target_number TEXT,
+  whatsapp_message_snapshot TEXT,
   idempotency_key TEXT UNIQUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -49,8 +54,11 @@ CREATE TABLE IF NOT EXISTS order_items (
   order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   product_id UUID REFERENCES products(id),
   name TEXT NOT NULL,
+  product_name_snapshot TEXT,
   quantity INTEGER NOT NULL CHECK (quantity > 0),
-  unit_price_cents INTEGER NOT NULL CHECK (unit_price_cents >= 0)
+  unit_price_cents INTEGER NOT NULL CHECK (unit_price_cents >= 0),
+  unit_price_snapshot INTEGER,
+  line_total INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS store_settings (
@@ -60,6 +68,7 @@ CREATE TABLE IF NOT EXISTS store_settings (
   allow_delivery BOOLEAN NOT NULL DEFAULT TRUE,
   allow_pickup BOOLEAN NOT NULL DEFAULT TRUE,
   default_order_message TEXT,
+  public_site_url TEXT NOT NULL DEFAULT 'https://refreshice.netlify.app/',
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT one_row CHECK (id = 1)
 );
@@ -67,6 +76,41 @@ CREATE TABLE IF NOT EXISTS store_settings (
 INSERT INTO store_settings (id) VALUES (1)
 ON CONFLICT (id) DO NOTHING;
 
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_address TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_cents INTEGER;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS whatsapp_target_number TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS whatsapp_message_snapshot TEXT;
+
+UPDATE orders SET payment_method = COALESCE(payment_method, 'pix');
+UPDATE orders SET delivery_address = COALESCE(delivery_address, address);
+UPDATE orders SET total_cents = COALESCE(total_cents, subtotal_cents, 0);
+
+ALTER TABLE orders ALTER COLUMN payment_method SET DEFAULT 'pix';
+ALTER TABLE orders ALTER COLUMN payment_method SET NOT NULL;
+ALTER TABLE orders ALTER COLUMN total_cents SET DEFAULT 0;
+ALTER TABLE orders ALTER COLUMN total_cents SET NOT NULL;
+
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check;
+ALTER TABLE orders ADD CONSTRAINT orders_payment_method_check CHECK (payment_method IN ('pix', 'credit_card', 'debit_card'));
+
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
+ALTER TABLE orders ADD CONSTRAINT orders_status_check CHECK (status IN ('pending','confirmed','preparing','delivered','canceled','pending_whatsapp','rejected'));
+
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS product_name_snapshot TEXT;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS unit_price_snapshot INTEGER;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS line_total INTEGER;
+
+UPDATE order_items SET product_name_snapshot = COALESCE(product_name_snapshot, name);
+UPDATE order_items SET unit_price_snapshot = COALESCE(unit_price_snapshot, unit_price_cents);
+UPDATE order_items SET line_total = COALESCE(line_total, unit_price_cents * quantity);
+
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS public_site_url TEXT;
+UPDATE store_settings SET public_site_url = COALESCE(NULLIF(public_site_url, ''), 'https://refreshice.netlify.app/');
+ALTER TABLE store_settings ALTER COLUMN public_site_url SET DEFAULT 'https://refreshice.netlify.app/';
+ALTER TABLE store_settings ALTER COLUMN public_site_url SET NOT NULL;
+
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);

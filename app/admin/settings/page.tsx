@@ -8,7 +8,8 @@ export default function AdminSettingsPage() {
     owner_whatsapp_number: '',
     allow_delivery: true,
     allow_pickup: true,
-    default_order_message: ''
+    default_order_message: '',
+    public_site_url: 'https://refreshice.netlify.app/'
   });
 
   useEffect(() => {
@@ -34,6 +35,7 @@ export default function AdminSettingsPage() {
         <input className="w-full rounded-xl border px-3 py-2" value={form.store_name} onChange={(e) => setForm({ ...form, store_name: e.target.value })} placeholder="Nome da loja" />
         <input className="w-full rounded-xl border px-3 py-2" value={form.owner_whatsapp_number} onChange={(e) => setForm({ ...form, owner_whatsapp_number: e.target.value })} placeholder="WhatsApp do dono (somente números)" />
         <textarea className="w-full rounded-xl border px-3 py-2" rows={3} value={form.default_order_message} onChange={(e) => setForm({ ...form, default_order_message: e.target.value })} placeholder="Mensagem padrão opcional" />
+        <input className="w-full rounded-xl border px-3 py-2" value={form.public_site_url} onChange={(e) => setForm({ ...form, public_site_url: e.target.value })} placeholder="URL pública do site" />
 
         <label className="flex items-center gap-2"><input type="checkbox" checked={form.allow_delivery} onChange={(e) => setForm({ ...form, allow_delivery: e.target.checked })} /> Entrega</label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={form.allow_pickup} onChange={(e) => setForm({ ...form, allow_pickup: e.target.checked })} /> Retirada</label>

@@ -62,5 +62,6 @@ export const demoSettings: StoreSettings = {
   owner_whatsapp_number: '5511999999999',
   allow_delivery: true,
   allow_pickup: true,
-  default_order_message: 'Olá! Quero confirmar meu pedido demo.'
+  default_order_message: 'Olá! Quero confirmar meu pedido demo.',
+  public_site_url: 'https://refreshice.netlify.app/'
 };
