@@ -75,6 +75,25 @@ npm run db:seed
 npm run dev
 ```
 
+## Abrir o site mesmo sem banco/fotos (modo demonstração)
+
+Se você quiser apenas validar layout e fluxo do checkout antes de conectar o Neon/Cloudinary:
+
+1. **Não defina** `DATABASE_URL`.
+2. Rode:
+
+```bash
+npm install
+npm run dev
+```
+
+Nesse modo, o sistema usa dados simulados (`lib/demo-data.ts`) para:
+- página inicial,
+- produtos no admin,
+- checkout e link de WhatsApp.
+
+> Isso permite publicar na Netlify e navegar normalmente, mesmo sem catálogo real e sem fotos finais.
+
 ## Variáveis de ambiente
 
 - `DATABASE_URL`: conexão Neon Postgres
@@ -121,6 +140,48 @@ Comportamento no checkout:
 - Depende do cliente ter WhatsApp disponível
 - Não confirma entrega de mensagem automaticamente
 - Não possui bot, webhook ou leitura de resposta
+
+## Diagnóstico rápido de erro no deploy (Netlify + Neon)
+
+Se aparecer erro do tipo **"Application error: a server-side exception has occurred"**:
+
+1. Verifique no Netlify se `DATABASE_URL` está preenchida corretamente.
+2. Confirme se as tabelas foram criadas no Neon:
+   - `products`, `product_images`, `categories`, `orders`, `order_items`, `store_settings`.
+3. Rode migração/seed apontando para o mesmo banco do deploy.
+4. Se o banco estiver indisponível, o app agora entra em **modo demonstração** para não derrubar a vitrine.
+
+## Mapa funcional (análise do projeto)
+
+### Área pública
+
+- **`/` (vitrine):** lista produtos/categorias, filtra por categoria, adiciona ao carrinho.
+- **`/checkout`:** recebe nome/telefone/endereço, valida tipos de atendimento e finaliza pedido.
+- **`/order-success`:** página de confirmação.
+
+### API pública
+
+- **`GET /api/products`:** retorna catálogo + categorias + configurações da loja.
+- **`GET /api/settings`:** retorna flags de atendimento e dados da loja.
+- **`POST /api/orders`:** cria pedido e devolve `whatsappUrl`.
+- **`POST /api/upload`:** endpoint preparado para upload (Cloudinary).
+
+### Área administrativa
+
+- **`/admin/login`:** autenticação simples por senha (`ADMIN_PASSWORD`).
+- **`/admin/orders`:** lista pedidos e altera status.
+- **`/admin/products`:** cria/lista/remove produtos.
+- **`/admin/settings`:** altera WhatsApp da loja e regras de entrega/retirada.
+
+### API admin
+
+- **`/api/admin/login`**
+- **`/api/admin/orders`**
+- **`/api/admin/orders/[id]/status`**
+- **`/api/admin/products`**
+- **`/api/admin/settings`**
+
+Todas protegidas por cookie de sessão.
 
 ## Próximos passos (fase 2)
 
