@@ -26,10 +26,13 @@ export type CartItem = {
   quantity: number;
 };
 
+export type PaymentMethod = 'pix' | 'credit_card' | 'debit_card';
+
 export type StoreSettings = {
   store_name: string;
   owner_whatsapp_number: string | null;
   allow_delivery: boolean;
   allow_pickup: boolean;
   default_order_message: string | null;
+  public_site_url: string;
 };

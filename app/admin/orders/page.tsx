@@ -6,8 +6,9 @@ import { useEffect, useState } from 'react';
 type AdminOrder = {
   id: string;
   code: string;
-  status: 'pending_whatsapp' | 'confirmed' | 'rejected';
-  subtotal_cents: number;
+  status: 'pending' | 'confirmed' | 'preparing' | 'delivered' | 'canceled' | 'pending_whatsapp' | 'rejected';
+  total_cents: number;
+  payment_method: 'pix' | 'credit_card' | 'debit_card';
   customer_name: string;
   customer_phone: string;
   order_type: 'delivery' | 'pickup';
@@ -45,13 +46,14 @@ export default function AdminOrdersPage() {
                 <h2 className="font-semibold">{order.code}</h2>
                 <p className="text-sm text-slate-600">{order.customer_name} • {order.customer_phone}</p>
                 <p className="text-xs text-slate-500">Tipo: {order.order_type === 'delivery' ? 'Entrega' : 'Retirada'}</p>
+                <p className="text-xs text-slate-500">Pagamento: {order.payment_method === 'pix' ? 'Pix' : order.payment_method === 'credit_card' ? 'Cartão de crédito' : 'Cartão de débito'}</p>
               </div>
               <div className="text-right">
-                <p className="font-semibold">{currencyBRL(order.subtotal_cents)}</p>
+                <p className="font-semibold">{currencyBRL(order.total_cents)}</p>
                 <p className="text-xs text-slate-500">{order.status}</p>
               </div>
             </div>
-            {order.status === 'pending_whatsapp' && (
+            {(order.status === 'pending_whatsapp' || order.status === 'pending') && (
               <div className="mt-3 flex gap-2">
                 <button className="btn-primary" onClick={() => updateStatus(order.id, 'confirmed')}>Confirmar</button>
                 <button className="btn-secondary" onClick={() => updateStatus(order.id, 'rejected')}>Rejeitar</button>

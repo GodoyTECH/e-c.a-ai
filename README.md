@@ -38,6 +38,13 @@ types/
   contratos de payload e domínio
 ```
 
+
+## Bootstrap automático do banco (sem terminal local)
+
+Se `DATABASE_URL` estiver configurada, o backend aplica automaticamente o SQL de `db/schema.sql` na primeira operação que tocar o banco (catálogo, checkout, admin, etc.).
+
+Isso permite usar só **GitHub + Netlify + Neon** sem precisar rodar terminal local para criar tabela manualmente.
+
 ## Banco de dados (Neon)
 
 Tabelas:

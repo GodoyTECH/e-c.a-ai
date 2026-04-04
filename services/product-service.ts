@@ -1,6 +1,29 @@
-import { getDb } from '@/lib/db';
+import { ensureDbSchema, getDb } from '@/lib/db';
 import { Product, StoreSettings } from '@/lib/types';
 import { demoCategories, demoProducts, demoSettings } from '@/lib/demo-data';
+
+async function ensureDefaultCategories() {
+  const db = getDb();
+  const existing = await db.query('SELECT id, name, slug, active FROM categories WHERE active = true ORDER BY name ASC');
+  if (existing.rows.length) return existing.rows;
+
+  const defaults = [
+    { name: 'Açaí', slug: 'acai' },
+    { name: 'Cremes', slug: 'cremes' },
+    { name: 'Combos', slug: 'combos' }
+  ];
+
+  for (const category of defaults) {
+    await db.query('INSERT INTO categories (name, slug, active) VALUES ($1,$2,true) ON CONFLICT (slug) DO NOTHING', [
+      category.name,
+      category.slug
+    ]);
+  }
+
+  const created = await db.query('SELECT id, name, slug, active FROM categories WHERE active = true ORDER BY name ASC');
+  return created.rows;
+}
+
 
 export async function listStoreData() {
   if (!process.env.DATABASE_URL) {
@@ -8,8 +31,9 @@ export async function listStoreData() {
   }
 
   try {
+    await ensureDbSchema();
     const db = getDb();
-    const categoriesRes = await db.query('SELECT id, name, slug, active FROM categories WHERE active = true ORDER BY name ASC');
+    const categoriesRows = await ensureDefaultCategories();
     const productsRes = await db.query(
       `SELECT p.*, c.name as category_name
        FROM products p
@@ -18,11 +42,11 @@ export async function listStoreData() {
        ORDER BY p.featured DESC, p.created_at DESC`
     );
     const settingsRes = await db.query(
-      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message FROM store_settings WHERE id = 1'
+      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url FROM store_settings WHERE id = 1'
     );
 
     return {
-      categories: categoriesRes.rows,
+      categories: categoriesRows,
       products: productsRes.rows as Product[],
       settings: settingsRes.rows[0] as StoreSettings
     };
@@ -36,6 +60,7 @@ export async function listAdminProducts() {
   if (!process.env.DATABASE_URL) return demoProducts;
 
   try {
+    await ensureDbSchema();
     const db = getDb();
     const res = await db.query(
       `SELECT p.*, c.name as category_name
@@ -61,11 +86,22 @@ export async function upsertProduct(input: {
   main_image_url?: string;
   images?: string[];
 }) {
+  await ensureDbSchema();
   const db = getDb();
   const client = await db.connect();
 
   try {
     await client.query('BEGIN');
+
+    const categoryCheck = await client.query('SELECT id FROM categories WHERE id = $1', [input.category_id]);
+    if (!categoryCheck.rows[0]) {
+      const fallbackCategory = await client.query('SELECT id FROM categories ORDER BY created_at ASC LIMIT 1');
+      if (!fallbackCategory.rows[0]) {
+        throw new Error('Nenhuma categoria disponível para vincular o produto.');
+      }
+      input.category_id = fallbackCategory.rows[0].id;
+    }
+
     let productId = input.id;
     if (productId) {
       await client.query(
@@ -120,6 +156,7 @@ export async function upsertProduct(input: {
 }
 
 export async function deleteProduct(id: string) {
+  await ensureDbSchema();
   const db = getDb();
   await db.query('DELETE FROM products WHERE id = $1', [id]);
 }
@@ -128,9 +165,10 @@ export async function getStoreSettings() {
   if (!process.env.DATABASE_URL) return demoSettings;
 
   try {
+    await ensureDbSchema();
     const db = getDb();
     const res = await db.query(
-      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message FROM store_settings WHERE id=1'
+      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url FROM store_settings WHERE id=1'
     );
     return res.rows[0] as StoreSettings;
   } catch (error) {
@@ -140,22 +178,27 @@ export async function getStoreSettings() {
 }
 
 export async function updateStoreSettings(input: Partial<StoreSettings>) {
+  await ensureDbSchema();
   const db = getDb();
+
   await db.query(
-    `UPDATE store_settings SET
-      store_name = COALESCE($1, store_name),
-      owner_whatsapp_number = COALESCE($2, owner_whatsapp_number),
-      allow_delivery = COALESCE($3, allow_delivery),
-      allow_pickup = COALESCE($4, allow_pickup),
-      default_order_message = COALESCE($5, default_order_message),
-      updated_at = NOW()
-     WHERE id = 1`,
+    `INSERT INTO store_settings (id, store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, updated_at)
+     VALUES (1, $1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT (id) DO UPDATE SET
+      store_name = EXCLUDED.store_name,
+      owner_whatsapp_number = EXCLUDED.owner_whatsapp_number,
+      allow_delivery = EXCLUDED.allow_delivery,
+      allow_pickup = EXCLUDED.allow_pickup,
+      default_order_message = EXCLUDED.default_order_message,
+      public_site_url = EXCLUDED.public_site_url,
+      updated_at = NOW()`,
     [
-      input.store_name ?? null,
-      input.owner_whatsapp_number ?? null,
-      input.allow_delivery ?? null,
-      input.allow_pickup ?? null,
-      input.default_order_message ?? null
+      (input.store_name || 'Açaí da Casa').trim(),
+      (input.owner_whatsapp_number || '').replace(/\D/g, ''),
+      input.allow_delivery ?? true,
+      input.allow_pickup ?? true,
+      input.default_order_message ?? null,
+      (input.public_site_url || 'https://refreshice.netlify.app/').trim()
     ]
   );
 }
