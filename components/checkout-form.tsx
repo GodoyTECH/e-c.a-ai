@@ -3,13 +3,14 @@
 import { currencyBRL } from '@/lib/utils';
 import { useCart } from './cart-context';
 import { FormEvent, useEffect, useState } from 'react';
-import { StoreSettings } from '@/lib/types';
+import { PaymentMethod, StoreSettings } from '@/lib/types';
 
 export function CheckoutForm() {
   const { items, totalCents, addItem, removeItem, clear } = useCart();
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [orderType, setOrderType] = useState<'delivery' | 'pickup'>('delivery');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');
 
   useEffect(() => {
     fetch('/api/settings')
@@ -44,6 +45,7 @@ export function CheckoutForm() {
       customerName: String(formData.get('customerName') || ''),
       customerPhone: phone,
       orderType,
+      paymentMethod,
       address: String(formData.get('address') || ''),
       notes: String(formData.get('notes') || ''),
       items
@@ -137,6 +139,26 @@ export function CheckoutForm() {
           </div>
         </div>
 
+
+        <div>
+          <p className="mb-1 font-medium">Forma de pagamento</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {[
+              { value: 'pix' as const, label: 'Pix' },
+              { value: 'credit_card' as const, label: 'Cartão de crédito' },
+              { value: 'debit_card' as const, label: 'Cartão de débito' }
+            ].map((method) => (
+              <button
+                key={method.value}
+                type="button"
+                onClick={() => setPaymentMethod(method.value)}
+                className={`rounded-xl px-3 py-2 text-sm ${paymentMethod === method.value ? 'bg-acai text-white' : 'bg-slate-100'}`}
+              >
+                {method.label}
+              </button>
+            ))}
+          </div>
+        </div>
         {orderType === 'delivery' && <input name="address" required placeholder="Endereço de entrega" className="w-full rounded-xl border px-3 py-2" />}
         <textarea name="notes" placeholder="Observações" className="w-full rounded-xl border px-3 py-2" rows={3} />
 

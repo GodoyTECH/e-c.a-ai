@@ -1,4 +1,4 @@
-import { getDb } from '@/lib/db';
+import { ensureDbSchema, getDb } from '@/lib/db';
 import { Product, StoreSettings } from '@/lib/types';
 import { demoCategories, demoProducts, demoSettings } from '@/lib/demo-data';
 
@@ -8,6 +8,7 @@ export async function listStoreData() {
   }
 
   try {
+    await ensureDbSchema();
     const db = getDb();
     const categoriesRes = await db.query('SELECT id, name, slug, active FROM categories WHERE active = true ORDER BY name ASC');
     const productsRes = await db.query(
@@ -18,7 +19,7 @@ export async function listStoreData() {
        ORDER BY p.featured DESC, p.created_at DESC`
     );
     const settingsRes = await db.query(
-      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message FROM store_settings WHERE id = 1'
+      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url FROM store_settings WHERE id = 1'
     );
 
     return {
@@ -36,6 +37,7 @@ export async function listAdminProducts() {
   if (!process.env.DATABASE_URL) return demoProducts;
 
   try {
+    await ensureDbSchema();
     const db = getDb();
     const res = await db.query(
       `SELECT p.*, c.name as category_name
@@ -61,6 +63,7 @@ export async function upsertProduct(input: {
   main_image_url?: string;
   images?: string[];
 }) {
+  await ensureDbSchema();
   const db = getDb();
   const client = await db.connect();
 
@@ -120,6 +123,7 @@ export async function upsertProduct(input: {
 }
 
 export async function deleteProduct(id: string) {
+  await ensureDbSchema();
   const db = getDb();
   await db.query('DELETE FROM products WHERE id = $1', [id]);
 }
@@ -128,9 +132,10 @@ export async function getStoreSettings() {
   if (!process.env.DATABASE_URL) return demoSettings;
 
   try {
+    await ensureDbSchema();
     const db = getDb();
     const res = await db.query(
-      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message FROM store_settings WHERE id=1'
+      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url FROM store_settings WHERE id=1'
     );
     return res.rows[0] as StoreSettings;
   } catch (error) {
@@ -140,6 +145,7 @@ export async function getStoreSettings() {
 }
 
 export async function updateStoreSettings(input: Partial<StoreSettings>) {
+  await ensureDbSchema();
   const db = getDb();
   await db.query(
     `UPDATE store_settings SET
@@ -148,6 +154,7 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       allow_delivery = COALESCE($3, allow_delivery),
       allow_pickup = COALESCE($4, allow_pickup),
       default_order_message = COALESCE($5, default_order_message),
+      public_site_url = COALESCE($6, public_site_url),
       updated_at = NOW()
      WHERE id = 1`,
     [
@@ -155,7 +162,8 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       input.owner_whatsapp_number ?? null,
       input.allow_delivery ?? null,
       input.allow_pickup ?? null,
-      input.default_order_message ?? null
+      input.default_order_message ?? null,
+      input.public_site_url ?? null
     ]
   );
 }
