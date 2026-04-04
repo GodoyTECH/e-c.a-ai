@@ -182,23 +182,36 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
   const db = getDb();
 
   await db.query(
-    `INSERT INTO store_settings (id, store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, updated_at)
-     VALUES (1, $1, $2, $3, $4, $5, $6, NOW())
-     ON CONFLICT (id) DO UPDATE SET
-      store_name = EXCLUDED.store_name,
-      owner_whatsapp_number = EXCLUDED.owner_whatsapp_number,
-      allow_delivery = EXCLUDED.allow_delivery,
-      allow_pickup = EXCLUDED.allow_pickup,
-      default_order_message = EXCLUDED.default_order_message,
-      public_site_url = EXCLUDED.public_site_url,
-      updated_at = NOW()`,
-    [
-      (input.store_name || 'Açaí da Casa').trim(),
-      (input.owner_whatsapp_number || '').replace(/\D/g, ''),
-      input.allow_delivery ?? true,
-      input.allow_pickup ?? true,
-      input.default_order_message ?? null,
-      (input.public_site_url || 'https://refreshice.netlify.app/').trim()
+await sql`
+  INSERT INTO store_settings (
+    id,
+    store_name,
+    owner_whatsapp_number,
+    allow_delivery,
+    allow_pickup,
+    default_order_message,
+    public_site_url,
+    updated_at
+  )
+  VALUES (
+    1,
+    ${(input.store_name || 'Açaí da Casa').trim()},
+    ${(input.owner_whatsapp_number || '').replace(/\D/g, '')},
+    ${input.allow_delivery ?? true},
+    ${input.allow_pickup ?? true},
+    ${input.default_order_message ?? null},
+    ${(input.public_site_url || 'https://refreshice.netlify.app/').trim()},
+    NOW()
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    store_name = EXCLUDED.store_name,
+    owner_whatsapp_number = EXCLUDED.owner_whatsapp_number,
+    allow_delivery = EXCLUDED.allow_delivery,
+    allow_pickup = EXCLUDED.allow_pickup,
+    default_order_message = EXCLUDED.default_order_message,
+    public_site_url = EXCLUDED.public_site_url,
+    updated_at = NOW()
+`;
     ]
   );
 }

@@ -21,19 +21,39 @@ const defaultForm: SettingsForm = {
 };
 
 export default function AdminSettingsPage() {
-  const [form, setForm] = useState<SettingsForm>(defaultForm);
-  const [loading, setLoading] = useState(false);
+const defaultForm: SettingsForm = {
+  store_name: '',
+  owner_whatsapp_number: '',
+  allow_delivery: true,
+  allow_pickup: true,
+  default_order_message: '',
+  public_site_url: 'https://refreshice.netlify.app/'
+};
 
-  async function loadSettings() {
-    const res = await fetch('/api/admin/settings', { cache: 'no-store' });
-    if (!res.ok) {
-      alert('Não foi possível carregar configurações.');
-      return;
-    }
+const [form, setForm] = useState<SettingsForm>(defaultForm);
+const [loading, setLoading] = useState(false);
 
-    const data = await res.json();
-    setForm((prev) => ({ ...prev, ...data, owner_whatsapp_number: data.owner_whatsapp_number || '' }));
+async function loadSettings() {
+  const res = await fetch('/api/admin/settings', { cache: 'no-store' });
+
+  if (!res.ok) {
+    alert('Não foi possível carregar configurações.');
+    return;
   }
+
+  const data = await res.json();
+
+  setForm((prev) => ({
+    ...prev,
+    ...data,
+    store_name: data.store_name || '',
+    owner_whatsapp_number: data.owner_whatsapp_number || '',
+    allow_delivery: typeof data.allow_delivery === 'boolean' ? data.allow_delivery : true,
+    allow_pickup: typeof data.allow_pickup === 'boolean' ? data.allow_pickup : true,
+    default_order_message: data.default_order_message || '',
+    public_site_url: data.public_site_url || 'https://refreshice.netlify.app/'
+  }));
+}
 
   useEffect(() => {
     loadSettings();
