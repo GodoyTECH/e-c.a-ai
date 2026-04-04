@@ -7,37 +7,47 @@ export async function listStoreData() {
     return { categories: demoCategories, products: demoProducts, settings: demoSettings };
   }
 
-  const db = getDb();
-  const categoriesRes = await db.query('SELECT id, name, slug, active FROM categories WHERE active = true ORDER BY name ASC');
-  const productsRes = await db.query(
-    `SELECT p.*, c.name as category_name
-     FROM products p
-     JOIN categories c ON c.id = p.category_id
-     WHERE p.active = true
-     ORDER BY p.featured DESC, p.created_at DESC`
-  );
-  const settingsRes = await db.query(
-    'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message FROM store_settings WHERE id = 1'
-  );
+  try {
+    const db = getDb();
+    const categoriesRes = await db.query('SELECT id, name, slug, active FROM categories WHERE active = true ORDER BY name ASC');
+    const productsRes = await db.query(
+      `SELECT p.*, c.name as category_name
+       FROM products p
+       JOIN categories c ON c.id = p.category_id
+       WHERE p.active = true
+       ORDER BY p.featured DESC, p.created_at DESC`
+    );
+    const settingsRes = await db.query(
+      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message FROM store_settings WHERE id = 1'
+    );
 
-  return {
-    categories: categoriesRes.rows,
-    products: productsRes.rows as Product[],
-    settings: settingsRes.rows[0] as StoreSettings
-  };
+    return {
+      categories: categoriesRes.rows,
+      products: productsRes.rows as Product[],
+      settings: settingsRes.rows[0] as StoreSettings
+    };
+  } catch (error) {
+    console.warn('Falha ao consultar banco de dados. Entrando em modo demonstração.', error);
+    return { categories: demoCategories, products: demoProducts, settings: demoSettings };
+  }
 }
 
 export async function listAdminProducts() {
   if (!process.env.DATABASE_URL) return demoProducts;
 
-  const db = getDb();
-  const res = await db.query(
-    `SELECT p.*, c.name as category_name
-     FROM products p
-     JOIN categories c ON c.id = p.category_id
-     ORDER BY p.created_at DESC`
-  );
-  return res.rows as Product[];
+  try {
+    const db = getDb();
+    const res = await db.query(
+      `SELECT p.*, c.name as category_name
+       FROM products p
+       JOIN categories c ON c.id = p.category_id
+       ORDER BY p.created_at DESC`
+    );
+    return res.rows as Product[];
+  } catch (error) {
+    console.warn('Falha ao listar produtos do admin. Retornando dados demo.', error);
+    return demoProducts;
+  }
 }
 
 export async function upsertProduct(input: {
@@ -117,11 +127,16 @@ export async function deleteProduct(id: string) {
 export async function getStoreSettings() {
   if (!process.env.DATABASE_URL) return demoSettings;
 
-  const db = getDb();
-  const res = await db.query(
-    'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message FROM store_settings WHERE id=1'
-  );
-  return res.rows[0] as StoreSettings;
+  try {
+    const db = getDb();
+    const res = await db.query(
+      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message FROM store_settings WHERE id=1'
+    );
+    return res.rows[0] as StoreSettings;
+  } catch (error) {
+    console.warn('Falha ao carregar configurações da loja. Retornando configurações demo.', error);
+    return demoSettings;
+  }
 }
 
 export async function updateStoreSettings(input: Partial<StoreSettings>) {
