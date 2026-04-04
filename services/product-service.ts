@@ -2,6 +2,29 @@ import { ensureDbSchema, getDb } from '@/lib/db';
 import { Product, StoreSettings } from '@/lib/types';
 import { demoCategories, demoProducts, demoSettings } from '@/lib/demo-data';
 
+async function ensureDefaultCategories() {
+  const db = getDb();
+  const existing = await db.query('SELECT id, name, slug, active FROM categories WHERE active = true ORDER BY name ASC');
+  if (existing.rows.length) return existing.rows;
+
+  const defaults = [
+    { name: 'Açaí', slug: 'acai' },
+    { name: 'Cremes', slug: 'cremes' },
+    { name: 'Combos', slug: 'combos' }
+  ];
+
+  for (const category of defaults) {
+    await db.query('INSERT INTO categories (name, slug, active) VALUES ($1,$2,true) ON CONFLICT (slug) DO NOTHING', [
+      category.name,
+      category.slug
+    ]);
+  }
+
+  const created = await db.query('SELECT id, name, slug, active FROM categories WHERE active = true ORDER BY name ASC');
+  return created.rows;
+}
+
+
 export async function listStoreData() {
   if (!process.env.DATABASE_URL) {
     return { categories: demoCategories, products: demoProducts, settings: demoSettings };
@@ -10,7 +33,7 @@ export async function listStoreData() {
   try {
     await ensureDbSchema();
     const db = getDb();
-    const categoriesRes = await db.query('SELECT id, name, slug, active FROM categories WHERE active = true ORDER BY name ASC');
+    const categoriesRows = await ensureDefaultCategories();
     const productsRes = await db.query(
       `SELECT p.*, c.name as category_name
        FROM products p
@@ -23,7 +46,7 @@ export async function listStoreData() {
     );
 
     return {
-      categories: categoriesRes.rows,
+      categories: categoriesRows,
       products: productsRes.rows as Product[],
       settings: settingsRes.rows[0] as StoreSettings
     };
@@ -69,6 +92,16 @@ export async function upsertProduct(input: {
 
   try {
     await client.query('BEGIN');
+
+    const categoryCheck = await client.query('SELECT id FROM categories WHERE id = $1', [input.category_id]);
+    if (!categoryCheck.rows[0]) {
+      const fallbackCategory = await client.query('SELECT id FROM categories ORDER BY created_at ASC LIMIT 1');
+      if (!fallbackCategory.rows[0]) {
+        throw new Error('Nenhuma categoria disponível para vincular o produto.');
+      }
+      input.category_id = fallbackCategory.rows[0].id;
+    }
+
     let productId = input.id;
     if (productId) {
       await client.query(

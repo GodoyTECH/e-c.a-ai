@@ -1,5 +1,8 @@
 import './globals.css';
 import { CartProvider } from '@/components/cart-context';
+import { InternalNav } from '@/components/internal-nav';
+import { PwaInstallCard } from '@/components/pwa-install-card';
+import { SwRegister } from '@/components/sw-register';
 
 export const metadata = {
   title: 'Açaí da Casa',
@@ -10,7 +13,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR">
       <body>
-        <CartProvider>{children}</CartProvider>
+        <CartProvider>
+          <SwRegister />
+          <InternalNav />
+          {children}
+          <PwaInstallCard />
+        </CartProvider>
       </body>
     </html>
   );
