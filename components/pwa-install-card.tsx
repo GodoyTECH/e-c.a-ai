@@ -6,11 +6,16 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 import { useEffect, useMemo, useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 
-const DISMISS_KEY = 'pwa-install-dismissed';
+const DISMISS_KEY_SITE = 'pwa-install-dismissed-site';
+const DISMISS_KEY_ADMIN = 'pwa-install-dismissed-admin';
 
 export function PwaInstallCard() {
+  const pathname = usePathname();
+  const isAdminPage = pathname.startsWith('/admin');
+  const dismissKey = isAdminPage ? DISMISS_KEY_ADMIN : DISMISS_KEY_SITE;
 
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
@@ -22,7 +27,7 @@ export function PwaInstallCard() {
       return;
     }
 
-    const wasDismissed = localStorage.getItem(DISMISS_KEY) === '1';
+    const wasDismissed = localStorage.getItem(dismissKey) === '1';
     setDismissed(wasDismissed);
 
     const onBeforeInstallPrompt = (event: Event) => {
@@ -42,7 +47,7 @@ export function PwaInstallCard() {
       window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
       window.removeEventListener('appinstalled', onInstalled);
     };
-  }, []);
+  }, [dismissKey]);
 
   const isIos = useMemo(() => {
     if (typeof navigator === 'undefined') return false;
@@ -60,9 +65,13 @@ export function PwaInstallCard() {
 
   return (
     <aside className="fixed bottom-4 left-4 right-4 z-50 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur md:left-auto md:w-[360px]">
-      <h2 className="font-semibold text-slate-900">Instalar app</h2>
+      <h2 className="font-semibold text-slate-900">{isAdminPage ? 'Instalar painel admin' : 'Instalar app da loja'}</h2>
       {canPrompt ? (
-        <p className="mt-1 text-sm text-slate-600">Instale para abrir mais rápido e usar em modo app.</p>
+        <p className="mt-1 text-sm text-slate-600">
+          {isAdminPage
+            ? 'Instale o painel para acesso rápido aos pedidos e configurações.'
+            : 'Instale a loja para abrir mais rápido e usar em modo app.'}
+        </p>
 
       ) : isIos ? (
         <p className="mt-1 text-sm text-slate-600">No iPhone: toque em compartilhar e depois em “Adicionar à Tela de Início”.</p>
@@ -90,7 +99,7 @@ export function PwaInstallCard() {
           className="btn-secondary"
           type="button"
           onClick={() => {
-            localStorage.setItem(DISMISS_KEY, '1');
+            localStorage.setItem(dismissKey, '1');
             setDismissed(true);
           }}
         >
