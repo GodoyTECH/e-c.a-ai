@@ -7,9 +7,11 @@ type BeforeInstallPromptEvent = Event & {
 
 import { useEffect, useMemo, useState } from 'react';
 
+
 const DISMISS_KEY = 'pwa-install-dismissed';
 
 export function PwaInstallCard() {
+
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -47,10 +49,12 @@ export function PwaInstallCard() {
     return /iphone|ipad|ipod/i.test(navigator.userAgent);
   }, []);
 
-  if (installed || dismissed) return null;
+  if (installed || (dismissed && !isAdminPage)) return null;
 
   const canPrompt = Boolean(deferredPrompt);
-  const shouldShow = canPrompt || isIos;
+  const shouldShow = canPrompt || isIos || isAdminPage;
+
+
 
   if (!shouldShow) return null;
 
@@ -59,8 +63,12 @@ export function PwaInstallCard() {
       <h2 className="font-semibold text-slate-900">Instalar app</h2>
       {canPrompt ? (
         <p className="mt-1 text-sm text-slate-600">Instale para abrir mais rápido e usar em modo app.</p>
-      ) : (
+
+      ) : isIos ? (
         <p className="mt-1 text-sm text-slate-600">No iPhone: toque em compartilhar e depois em “Adicionar à Tela de Início”.</p>
+      ) : (
+        <p className="mt-1 text-sm text-slate-600">No Chrome: abra o menu do navegador e toque em “Instalar app”.</p>
+
       )}
 
       <div className="mt-3 flex gap-2">

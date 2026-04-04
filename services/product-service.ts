@@ -180,23 +180,38 @@ export async function getStoreSettings() {
 export async function updateStoreSettings(input: Partial<StoreSettings>) {
   await ensureDbSchema();
   const db = getDb();
+
   await db.query(
-    `UPDATE store_settings SET
-      store_name = COALESCE($1, store_name),
-      owner_whatsapp_number = COALESCE($2, owner_whatsapp_number),
-      allow_delivery = COALESCE($3, allow_delivery),
-      allow_pickup = COALESCE($4, allow_pickup),
-      default_order_message = COALESCE($5, default_order_message),
-      public_site_url = COALESCE($6, public_site_url),
-      updated_at = NOW()
-     WHERE id = 1`,
-    [
-      input.store_name ?? null,
-      input.owner_whatsapp_number ?? null,
-      input.allow_delivery ?? null,
-      input.allow_pickup ?? null,
-      input.default_order_message ?? null,
-      input.public_site_url ?? null
+await sql`
+  INSERT INTO store_settings (
+    id,
+    store_name,
+    owner_whatsapp_number,
+    allow_delivery,
+    allow_pickup,
+    default_order_message,
+    public_site_url,
+    updated_at
+  )
+  VALUES (
+    1,
+    ${(input.store_name || 'Açaí da Casa').trim()},
+    ${(input.owner_whatsapp_number || '').replace(/\D/g, '')},
+    ${input.allow_delivery ?? true},
+    ${input.allow_pickup ?? true},
+    ${input.default_order_message ?? null},
+    ${(input.public_site_url || 'https://refreshice.netlify.app/').trim()},
+    NOW()
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    store_name = EXCLUDED.store_name,
+    owner_whatsapp_number = EXCLUDED.owner_whatsapp_number,
+    allow_delivery = EXCLUDED.allow_delivery,
+    allow_pickup = EXCLUDED.allow_pickup,
+    default_order_message = EXCLUDED.default_order_message,
+    public_site_url = EXCLUDED.public_site_url,
+    updated_at = NOW()
+`;
     ]
   );
 }

@@ -2,30 +2,86 @@
 
 import { useEffect, useState } from 'react';
 
+type SettingsForm = {
+  store_name: string;
+  owner_whatsapp_number: string;
+  allow_delivery: boolean;
+  allow_pickup: boolean;
+  default_order_message: string;
+  public_site_url: string;
+};
+
+const defaultForm: SettingsForm = {
+  store_name: '',
+  owner_whatsapp_number: '',
+  allow_delivery: true,
+  allow_pickup: true,
+  default_order_message: '',
+  public_site_url: 'https://refreshice.netlify.app/'
+};
+
 export default function AdminSettingsPage() {
-  const [form, setForm] = useState({
-    store_name: '',
-    owner_whatsapp_number: '',
-    allow_delivery: true,
-    allow_pickup: true,
-    default_order_message: '',
-    public_site_url: 'https://refreshice.netlify.app/'
-  });
+const defaultForm: SettingsForm = {
+  store_name: '',
+  owner_whatsapp_number: '',
+  allow_delivery: true,
+  allow_pickup: true,
+  default_order_message: '',
+  public_site_url: 'https://refreshice.netlify.app/'
+};
+
+const [form, setForm] = useState<SettingsForm>(defaultForm);
+const [loading, setLoading] = useState(false);
+
+async function loadSettings() {
+  const res = await fetch('/api/admin/settings', { cache: 'no-store' });
+
+  if (!res.ok) {
+    alert('Não foi possível carregar configurações.');
+    return;
+  }
+
+  const data = await res.json();
+
+  setForm((prev) => ({
+    ...prev,
+    ...data,
+    store_name: data.store_name || '',
+    owner_whatsapp_number: data.owner_whatsapp_number || '',
+    allow_delivery: typeof data.allow_delivery === 'boolean' ? data.allow_delivery : true,
+    allow_pickup: typeof data.allow_pickup === 'boolean' ? data.allow_pickup : true,
+    default_order_message: data.default_order_message || '',
+    public_site_url: data.public_site_url || 'https://refreshice.netlify.app/'
+  }));
+}
 
   useEffect(() => {
-    fetch('/api/admin/settings')
-      .then((res) => res.json())
-      .then((data) => setForm({ ...form, ...data, owner_whatsapp_number: data.owner_whatsapp_number || '' }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadSettings();
   }, []);
 
   async function onSave() {
-    await fetch('/api/admin/settings', {
+    setLoading(true);
+    const payload = {
+      ...form,
+      owner_whatsapp_number: form.owner_whatsapp_number.replace(/\D/g, ''),
+      public_site_url: form.public_site_url.trim()
+    };
+
+    const res = await fetch('/api/admin/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form)
+      body: JSON.stringify(payload)
     });
-    alert('Configurações salvas.');
+
+    setLoading(false);
+
+    if (!res.ok) {
+      alert('Não foi possível salvar configurações.');
+      return;
+    }
+
+    await loadSettings();
+    alert('Configurações salvas e aplicadas.');
   }
 
   return (
@@ -40,7 +96,7 @@ export default function AdminSettingsPage() {
         <label className="flex items-center gap-2"><input type="checkbox" checked={form.allow_delivery} onChange={(e) => setForm({ ...form, allow_delivery: e.target.checked })} /> Entrega</label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={form.allow_pickup} onChange={(e) => setForm({ ...form, allow_pickup: e.target.checked })} /> Retirada</label>
 
-        <button className="btn-primary" onClick={onSave}>Salvar configurações</button>
+        <button className="btn-primary" disabled={loading} onClick={onSave}>{loading ? 'Salvando...' : 'Salvar configurações'}</button>
       </section>
     </main>
   );
