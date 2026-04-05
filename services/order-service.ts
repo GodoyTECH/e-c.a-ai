@@ -47,11 +47,18 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
     }
 
     const settings = await client.query(
-      'SELECT owner_whatsapp_number, default_order_message, public_site_url FROM store_settings WHERE id = 1'
+      'SELECT owner_whatsapp_number, default_order_message, public_site_url, allow_delivery, allow_pickup FROM store_settings WHERE id = 1'
     );
 
     const code = generateOrderCode();
     const settingsRow = settings.rows[0] || {};
+    if (payload.orderType === 'delivery' && settingsRow.allow_delivery === false) {
+      throw new Error('Entrega está desativada nas configurações.');
+    }
+    if (payload.orderType === 'pickup' && settingsRow.allow_pickup === false) {
+      throw new Error('Retirada está desativada nas configurações.');
+    }
+
     const message = gerarMensagemPedido({
       orderCode: code,
       customerName: payload.customerName,
@@ -69,7 +76,7 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
     const orderRes = await client.query(
       `INSERT INTO orders
         (code, customer_name, customer_phone, order_type, payment_method, address, delivery_address, notes, status, subtotal_cents, total_cents, whatsapp_target_number, whatsapp_message_snapshot, idempotency_key)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12,$13)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending_whatsapp',$9,$10,$11,$12,$13)
        RETURNING id, code`,
       [
         code,

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <defs>
+    <linearGradient id="bgAdmin" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#334155"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="40" fill="url(#bgAdmin)"/>
+  <circle cx="96" cy="96" r="56" fill="#fff" opacity="0.9"/>
+  <text x="96" y="116" text-anchor="middle" font-size="56" font-family="Arial, sans-serif" font-weight="700" fill="#1e293b">PA</text>
+</svg>
