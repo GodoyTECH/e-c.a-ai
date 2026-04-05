@@ -45,9 +45,11 @@ export async function listStoreData() {
       'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url FROM store_settings WHERE id = 1'
     );
 
+    const products = productsRes.rows as Product[];
+
     return {
       categories: categoriesRows,
-      products: productsRes.rows as Product[],
+      products: products.length ? products : demoProducts,
       settings: settingsRes.rows[0] as StoreSettings
     };
   } catch (error) {
@@ -68,7 +70,8 @@ export async function listAdminProducts() {
        JOIN categories c ON c.id = p.category_id
        ORDER BY p.created_at DESC`
     );
-    return res.rows as Product[];
+    const products = res.rows as Product[];
+    return products.length ? products : demoProducts;
   } catch (error) {
     console.warn('Falha ao listar produtos do admin. Retornando dados demo.', error);
     return demoProducts;
@@ -208,7 +211,7 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       input.allow_delivery ?? true,
       input.allow_pickup ?? true,
       input.default_order_message ?? null,
-      (input.public_site_url || 'https://refreshice.netlify.app/').trim()
+      (input.public_site_url || 'https://refrescando.netlify.app/').trim()
     ]
   );
 }
