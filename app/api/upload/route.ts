@@ -7,6 +7,8 @@ type UploadRequest = {
   productName?: string;
 };
 
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
 function sanitizeDisplayName(value: string) {
   return value
     .normalize('NFD')
@@ -36,6 +38,17 @@ function isCloudinarySigned() {
   return Boolean(process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
 }
 
+function parseImageDataUrl(value: string) {
+  const match = value.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (!match) return null;
+
+  const mimeType = match[1].toLowerCase();
+  const base64Payload = match[2];
+  const sizeBytes = Math.floor((base64Payload.length * 3) / 4);
+
+  return { mimeType, sizeBytes };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as UploadRequest;
@@ -55,6 +68,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const parsedImage = parseImageDataUrl(imageBase64);
+    if (!parsedImage) {
+      return NextResponse.json(
+        {
+          error: 'Imagem inválida.',
+          details: 'Formato de imagem não suportado. Envie um arquivo de imagem válido.'
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!parsedImage.mimeType.startsWith('image/')) {
+      return NextResponse.json(
+        {
+          error: 'Imagem inválida.',
+          details: 'Apenas imagens são permitidas.'
+        },
+        { status: 400 }
+      );
+    }
+
+    if (parsedImage.sizeBytes > MAX_IMAGE_BYTES) {
+      return NextResponse.json(
+        {
+          error: 'Imagem inválida.',
+          details: 'A imagem excede o limite de 8MB.'
+        },
+        { status: 400 }
+      );
+    }
+
     const rawBaseName = body.productName || body.fileName || 'produto';
     const displayName = sanitizeDisplayName(rawBaseName) || 'produto';
     const slugBase = sanitizeSlug(rawBaseName) || 'produto';
@@ -65,11 +109,7 @@ export async function POST(request: NextRequest) {
     const endpoint = `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload`;
 
     const params = new URLSearchParams({
-      file: imageBase64,
-      folder,
-      asset_folder: folder,
-      display_name: displayName,
-      public_id: publicId
+      file: imageBase64
     });
 
     const signed = isCloudinarySigned();
@@ -88,6 +128,9 @@ export async function POST(request: NextRequest) {
         .update(`${signatureBase}${process.env.CLOUDINARY_API_SECRET}`)
         .digest('hex');
 
+      params.set('folder', folder);
+      params.set('asset_folder', folder);
+      params.set('display_name', displayName);
       params.set('public_id', publicId);
       params.set('timestamp', String(timestamp));
       params.set('api_key', process.env.CLOUDINARY_API_KEY as string);
@@ -117,8 +160,8 @@ export async function POST(request: NextRequest) {
         status: response.status,
         message: cloudinaryMessage,
         signed,
-        displayName,
-        folder,
+        displayName: signed ? displayName : undefined,
+        folder: signed ? folder : undefined,
         publicId: params.get('public_id')
       });
 
