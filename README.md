@@ -106,7 +106,10 @@ Nesse modo, o sistema usa dados simulados (`lib/demo-data.ts`) para:
 - `DATABASE_URL`: conexão Neon Postgres
 - `ADMIN_PASSWORD`: senha do `/admin`
 - `CLOUDINARY_CLOUD_NAME`: conta cloudinary
-- `CLOUDINARY_UPLOAD_PRESET`: preset upload unsigned
+- `CLOUDINARY_UPLOAD_PRESET`: preset upload unsigned (necessário quando não usar assinatura)
+- `CLOUDINARY_API_KEY`: chave da API Cloudinary (opcional para upload assinado)
+- `CLOUDINARY_API_SECRET`: segredo da API Cloudinary (opcional para upload assinado)
+- `NEXT_PUBLIC_SITE_URL`: URL pública da loja usada em links e mensagens
 
 ### Checklist rápido (Netlify) para upload e banco
 
@@ -114,7 +117,7 @@ Se você usa apenas GitHub + Netlify + Neon, valide no painel da Netlify:
 
 1. `DATABASE_URL` apontando para o projeto Neon correto.
 2. `ADMIN_PASSWORD` definido em **Production** e **Deploy Previews**.
-3. `CLOUDINARY_CLOUD_NAME` e `CLOUDINARY_UPLOAD_PRESET` definidos no mesmo ambiente do deploy.
+3. `CLOUDINARY_CLOUD_NAME` e (`CLOUDINARY_UPLOAD_PRESET` ou `CLOUDINARY_API_KEY` + `CLOUDINARY_API_SECRET`) definidos no mesmo ambiente do deploy.
 4. Após alterar qualquer variável, faça **novo deploy** (redeploy) para aplicar.
 
 > Se o upload falhar, o endpoint `/api/upload` agora retorna detalhes do erro do Cloudinary para facilitar diagnóstico.

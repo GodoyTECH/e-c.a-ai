@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 type SettingsForm = {
   store_name: string;
@@ -11,18 +11,28 @@ type SettingsForm = {
   public_site_url: string;
 };
 
+const DEFAULT_PUBLIC_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://refrescando.netlify.app/';
+
 const defaultForm: SettingsForm = {
   store_name: '',
   owner_whatsapp_number: '',
   allow_delivery: true,
   allow_pickup: true,
   default_order_message: '',
-  public_site_url: 'https://refrescando.netlify.app/'
+  public_site_url: DEFAULT_PUBLIC_SITE_URL
 };
+
+const MARKETING_MESSAGE_KEY = 'marketing-message-v1';
 
 export default function AdminSettingsPage() {
   const [form, setForm] = useState<SettingsForm>(defaultForm);
   const [loading, setLoading] = useState(false);
+  const [marketingMessage, setMarketingMessage] = useState('');
+
+  const defaultMarketingMessage = useMemo(() => {
+    const siteUrl = form.public_site_url?.trim() || DEFAULT_PUBLIC_SITE_URL;
+    return `🍧 Bateu vontade de um açaí geladinho?\n\nTemos opções deliciosas com acompanhamentos incríveis e entrega rápida! 😍\nFaça seu pedido agora pelo cardápio digital:\n${siteUrl}`;
+  }, [form.public_site_url]);
 
   async function loadSettings() {
     const res = await fetch('/api/admin/settings', { cache: 'no-store' });
@@ -42,13 +52,19 @@ export default function AdminSettingsPage() {
       allow_delivery: typeof data.allow_delivery === 'boolean' ? data.allow_delivery : true,
       allow_pickup: typeof data.allow_pickup === 'boolean' ? data.allow_pickup : true,
       default_order_message: data.default_order_message || '',
-      public_site_url: data.public_site_url || 'https://refrescando.netlify.app/'
+      public_site_url: data.public_site_url || DEFAULT_PUBLIC_SITE_URL
     }));
   }
 
   useEffect(() => {
     loadSettings();
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = localStorage.getItem(MARKETING_MESSAGE_KEY);
+    setMarketingMessage(stored || defaultMarketingMessage);
+  }, [defaultMarketingMessage]);
 
   async function onSave() {
     setLoading(true);
@@ -75,8 +91,33 @@ export default function AdminSettingsPage() {
     alert('Configurações salvas e aplicadas.');
   }
 
+  async function shareMarketing() {
+    const text = marketingMessage.trim() || defaultMarketingMessage;
+    const title = form.store_name ? `Promoção - ${form.store_name}` : 'Promoção de Açaí';
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title,
+          text
+        });
+        return;
+      } catch {
+        // fallback para clipboard abaixo
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      alert('Mensagem copiada! Agora é só colar no app que preferir.');
+    } catch {
+      const encoded = encodeURIComponent(text);
+      window.open(`https://wa.me/?text=${encoded}`, '_blank', 'noopener,noreferrer');
+    }
+  }
+
   return (
-    <main className="mx-auto max-w-3xl p-4 md:p-8">
+    <main className="mx-auto max-w-3xl space-y-4 p-4 md:p-8">
       <section className="card glass-card space-y-3">
         <h1 className="text-2xl font-bold">Configurações da loja</h1>
         <input className="w-full rounded-xl border px-3 py-2" value={form.store_name} onChange={(e) => setForm({ ...form, store_name: e.target.value })} placeholder="Nome da loja" />
@@ -88,6 +129,37 @@ export default function AdminSettingsPage() {
         <label className="flex items-center gap-2"><input type="checkbox" checked={form.allow_pickup} onChange={(e) => setForm({ ...form, allow_pickup: e.target.checked })} /> Retirada</label>
 
         <button className="btn-primary" disabled={loading} onClick={onSave}>{loading ? 'Salvando...' : 'Salvar configurações'}</button>
+      </section>
+
+      <section className="card glass-card space-y-3">
+        <h2 className="text-xl font-bold">Marketing e compartilhamento</h2>
+        <p className="text-sm text-slate-600">Edite a mensagem promocional e use o botão para compartilhar em qualquer app compatível.</p>
+        <textarea
+          className="w-full rounded-xl border px-3 py-2"
+          rows={6}
+          value={marketingMessage}
+          onChange={(event) => {
+            const value = event.target.value;
+            setMarketingMessage(value);
+            localStorage.setItem(MARKETING_MESSAGE_KEY, value);
+          }}
+          placeholder="Escreva a mensagem de divulgação"
+        />
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-primary" type="button" onClick={shareMarketing}>
+            Compartilhar mensagem
+          </button>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => {
+              setMarketingMessage(defaultMarketingMessage);
+              localStorage.setItem(MARKETING_MESSAGE_KEY, defaultMarketingMessage);
+            }}
+          >
+            Restaurar mensagem padrão
+          </button>
+        </div>
       </section>
     </main>
   );

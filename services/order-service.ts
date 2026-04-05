@@ -4,12 +4,14 @@ import { gerarMensagemPedido } from '@/lib/formatOrderMessage';
 import { gerarLinkWhatsApp } from '@/lib/whatsapp';
 import { CheckoutPayload } from '@/types/order';
 
+const DEFAULT_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://refrescando.netlify.app/';
+
 export async function createOrder(payload: CheckoutPayload, idempotencyKey?: string) {
   const subtotal = payload.items.reduce((acc, item) => acc + item.priceCents * item.quantity, 0);
 
   if (!process.env.DATABASE_URL) {
     const code = generateOrderCode();
-    const siteUrl = 'https://refrescando.netlify.app/';
+    const siteUrl = DEFAULT_SITE_URL;
     const message = gerarMensagemPedido({
       orderCode: code,
       customerName: payload.customerName,
@@ -70,7 +72,7 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
       subtotalCents: subtotal,
       items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity })),
       defaultMessage: settingsRow.default_order_message || null,
-      siteUrl: settingsRow.public_site_url || 'https://refrescando.netlify.app/'
+      siteUrl: settingsRow.public_site_url || DEFAULT_SITE_URL
     });
 
     const orderRes = await client.query(
@@ -105,31 +107,27 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
 
     await client.query('COMMIT');
 
-await client.query('COMMIT');
-
-let whatsappUrl: string | null = null;
-try {
-  whatsappUrl = gerarLinkWhatsApp({
-    ownerNumber: settingsRow.owner_whatsapp_number || '',
-    order: {
-      orderCode: code,
-      customerName: payload.customerName,
-      customerPhone: payload.customerPhone,
-      orderType: payload.orderType,
-      paymentMethod: payload.paymentMethod,
-      address: payload.address || null,
-      notes: payload.notes || null,
-      subtotalCents: subtotal,
-      items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity })),
-      defaultMessage: settingsRow.default_order_message || null,
-      siteUrl: settingsRow.public_site_url || 'https://refrescando.netlify.app/'
+    let whatsappUrl: string | null = null;
+    try {
+      whatsappUrl = gerarLinkWhatsApp({
+        ownerNumber: settingsRow.owner_whatsapp_number || '',
+        order: {
+          orderCode: code,
+          customerName: payload.customerName,
+          customerPhone: payload.customerPhone,
+          orderType: payload.orderType,
+          paymentMethod: payload.paymentMethod,
+          address: payload.address || null,
+          notes: payload.notes || null,
+          subtotalCents: subtotal,
+          items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity })),
+          defaultMessage: settingsRow.default_order_message || null,
+          siteUrl: settingsRow.public_site_url || DEFAULT_SITE_URL
+        }
+      });
+    } catch {
+      whatsappUrl = null;
     }
-  });
-} catch {
-  whatsappUrl = null;
-}
-
-return { ...orderRes.rows[0], whatsappUrl };
 
     return { ...orderRes.rows[0], whatsappUrl };
   } catch (error) {
