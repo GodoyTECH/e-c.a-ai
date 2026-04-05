@@ -9,7 +9,7 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
 
   if (!process.env.DATABASE_URL) {
     const code = generateOrderCode();
-    const siteUrl = 'https://refreshice.netlify.app/';
+    const siteUrl = 'https://refrescando.netlify.app/';
     const message = gerarMensagemPedido({
       orderCode: code,
       customerName: payload.customerName,
@@ -70,7 +70,7 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
       subtotalCents: subtotal,
       items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity })),
       defaultMessage: settingsRow.default_order_message || null,
-      siteUrl: settingsRow.public_site_url || 'https://refreshice.netlify.app/'
+      siteUrl: settingsRow.public_site_url || 'https://refrescando.netlify.app/'
     });
 
     const orderRes = await client.query(
@@ -118,7 +118,7 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
         subtotalCents: subtotal,
         items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity })),
         defaultMessage: settingsRow.default_order_message || null,
-        siteUrl: settingsRow.public_site_url || 'https://refreshice.netlify.app/'
+        siteUrl: settingsRow.public_site_url || 'https://refrescando.netlify.app/'
       }
     });
 

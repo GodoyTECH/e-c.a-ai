@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS store_settings (
   allow_delivery BOOLEAN NOT NULL DEFAULT TRUE,
   allow_pickup BOOLEAN NOT NULL DEFAULT TRUE,
   default_order_message TEXT,
-  public_site_url TEXT NOT NULL DEFAULT 'https://refreshice.netlify.app/',
+  public_site_url TEXT NOT NULL DEFAULT 'https://refrescando.netlify.app/',
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT one_row CHECK (id = 1)
 );
@@ -106,8 +106,8 @@ UPDATE order_items SET unit_price_snapshot = COALESCE(unit_price_snapshot, unit_
 UPDATE order_items SET line_total = COALESCE(line_total, unit_price_cents * quantity);
 
 ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS public_site_url TEXT;
-UPDATE store_settings SET public_site_url = COALESCE(NULLIF(public_site_url, ''), 'https://refreshice.netlify.app/');
-ALTER TABLE store_settings ALTER COLUMN public_site_url SET DEFAULT 'https://refreshice.netlify.app/';
+UPDATE store_settings SET public_site_url = COALESCE(NULLIF(public_site_url, ''), 'https://refrescando.netlify.app/');
+ALTER TABLE store_settings ALTER COLUMN public_site_url SET DEFAULT 'https://refrescando.netlify.app/';
 ALTER TABLE store_settings ALTER COLUMN public_site_url SET NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);

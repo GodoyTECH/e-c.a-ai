@@ -17,7 +17,7 @@ const defaultForm: SettingsForm = {
   allow_delivery: true,
   allow_pickup: true,
   default_order_message: '',
-  public_site_url: 'https://refreshice.netlify.app/'
+  public_site_url: 'https://refrescando.netlify.app/'
 };
 
 export default function AdminSettingsPage() {
@@ -42,7 +42,7 @@ export default function AdminSettingsPage() {
       allow_delivery: typeof data.allow_delivery === 'boolean' ? data.allow_delivery : true,
       allow_pickup: typeof data.allow_pickup === 'boolean' ? data.allow_pickup : true,
       default_order_message: data.default_order_message || '',
-      public_site_url: data.public_site_url || 'https://refreshice.netlify.app/'
+      public_site_url: data.public_site_url || 'https://refrescando.netlify.app/'
     }));
   }
 
