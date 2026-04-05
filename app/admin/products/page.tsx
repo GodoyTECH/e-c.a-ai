@@ -36,6 +36,8 @@ const emptyForm: FormState = {
   featured: false
 };
 
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
 function parsePriceToCents(value: string) {
   const normalized = value.trim().replace(/\s/g, '').replace(',', '.');
   if (!normalized) return null;
@@ -96,6 +98,18 @@ export default function AdminProductsPage() {
 
   async function onSelectImage(file: File | null) {
     if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('Arquivo inválido. Selecione uma imagem.');
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_BYTES) {
+      setError('A imagem deve ter no máximo 8MB.');
+      return;
+    }
+
+    setError('');
     setImageFileName(file.name || null);
     const reader = new FileReader();
     reader.onload = () => {
@@ -300,7 +314,10 @@ export default function AdminProductsPage() {
               type="file"
               accept="image/*"
               capture="environment"
-              onChange={(event) => onSelectImage(event.target.files?.[0] || null)}
+              onChange={(event) => {
+                onSelectImage(event.target.files?.[0] || null);
+                event.currentTarget.value = '';
+              }}
             />
           </label>
 
