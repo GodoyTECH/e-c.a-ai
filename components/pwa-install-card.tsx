@@ -11,18 +11,22 @@ import { usePathname } from 'next/navigation';
 
 const DISMISS_KEY_SITE = 'pwa-install-dismissed-site';
 const DISMISS_KEY_ADMIN = 'pwa-install-dismissed-admin';
+const INSTALLED_KEY_SITE = 'pwa-installed-site';
+const INSTALLED_KEY_ADMIN = 'pwa-installed-admin';
 
 export function PwaInstallCard() {
   const pathname = usePathname();
   const isAdminPage = pathname.startsWith('/admin');
   const dismissKey = isAdminPage ? DISMISS_KEY_ADMIN : DISMISS_KEY_SITE;
+  const installedKey = isAdminPage ? INSTALLED_KEY_ADMIN : INSTALLED_KEY_SITE;
 
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    const alreadyInstalled = localStorage.getItem(installedKey) === '1';
+    if (alreadyInstalled || window.matchMedia('(display-mode: standalone)').matches) {
       setInstalled(true);
       return;
     }
@@ -36,6 +40,7 @@ export function PwaInstallCard() {
     };
 
     const onInstalled = () => {
+      localStorage.setItem(installedKey, '1');
       setInstalled(true);
       setDeferredPrompt(null);
     };
@@ -47,20 +52,17 @@ export function PwaInstallCard() {
       window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
       window.removeEventListener('appinstalled', onInstalled);
     };
-  }, [dismissKey]);
+  }, [dismissKey, installedKey]);
 
   const isIos = useMemo(() => {
     if (typeof navigator === 'undefined') return false;
     return /iphone|ipad|ipod/i.test(navigator.userAgent);
   }, []);
 
-  if (installed || (dismissed && !isAdminPage)) return null;
+  if (installed || dismissed) return null;
 
   const canPrompt = Boolean(deferredPrompt);
   const shouldShow = canPrompt || isIos || isAdminPage;
-
-
-
   if (!shouldShow) return null;
 
   return (

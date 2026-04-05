@@ -22,6 +22,22 @@ const products = [
     category_slug: 'premium',
     featured: true,
     main_image_url: 'https://images.unsplash.com/photo-1542444592-0d6685ce4fd4'
+  },
+  {
+    name: 'Açaí Zero Açúcar 400ml',
+    description: 'Versão sem açúcar com mix de castanhas.',
+    price_cents: 2890,
+    category_slug: 'premium',
+    featured: false,
+    main_image_url: 'https://images.unsplash.com/photo-1514996937319-344454492b37'
+  },
+  {
+    name: 'Combo Família 4x300ml',
+    description: 'Quatro unidades de açaí tradicional com toppings.',
+    price_cents: 6990,
+    category_slug: 'combos',
+    featured: true,
+    main_image_url: 'https://images.unsplash.com/photo-1472555794301-77353b152fb7'
   }
 ];
 

@@ -77,7 +77,7 @@ export default function AdminSettingsPage() {
 
   return (
     <main className="mx-auto max-w-3xl p-4 md:p-8">
-      <section className="card space-y-3">
+      <section className="card glass-card space-y-3">
         <h1 className="text-2xl font-bold">Configurações da loja</h1>
         <input className="w-full rounded-xl border px-3 py-2" value={form.store_name} onChange={(e) => setForm({ ...form, store_name: e.target.value })} placeholder="Nome da loja" />
         <input className="w-full rounded-xl border px-3 py-2" value={form.owner_whatsapp_number} onChange={(e) => setForm({ ...form, owner_whatsapp_number: e.target.value })} placeholder="WhatsApp do dono (somente números)" />

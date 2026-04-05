@@ -88,7 +88,8 @@ export default function AdminProductsPage() {
       });
 
       if (!uploadRes.ok) {
-        setError('Falha no upload da imagem. Verifique Cloudinary.');
+        const uploadErr = await uploadRes.json().catch(() => ({}));
+        setError(uploadErr?.details || uploadErr?.error || 'Falha no upload da imagem. Verifique Cloudinary.');
         return;
       }
 
@@ -126,11 +127,68 @@ export default function AdminProductsPage() {
     await load();
   }
 
+  async function insertSampleProducts() {
+    if (!resolvedCategories.length) {
+      setError('Cadastre ou carregue categorias antes de inserir produtos de exemplo.');
+      return;
+    }
+
+    const fallbackCategory = resolvedCategories[0].id;
+    const samples = [
+      {
+        name: 'Açaí Copo 300ml',
+        description: 'Açaí tradicional com granola e banana.',
+        price_cents: 1990,
+        category_id: fallbackCategory,
+        active: true,
+        featured: true,
+        main_image_url: 'https://images.unsplash.com/photo-1590086782792-42dd2350140d?auto=format&fit=crop&w=1200&q=80',
+        images: []
+      },
+      {
+        name: 'Açaí Especial 500ml',
+        description: 'Açaí com leite em pó, morango e paçoca.',
+        price_cents: 3290,
+        category_id: fallbackCategory,
+        active: true,
+        featured: true,
+        main_image_url: 'https://images.unsplash.com/photo-1542444592-0d6685ce4fd4?auto=format&fit=crop&w=1200&q=80',
+        images: []
+      },
+      {
+        name: 'Combo Duplo 2x400ml',
+        description: 'Combo promocional com dois copos de 400ml.',
+        price_cents: 5490,
+        category_id: fallbackCategory,
+        active: true,
+        featured: false,
+        main_image_url: 'https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?auto=format&fit=crop&w=1200&q=80',
+        images: []
+      }
+    ];
+
+    setError('');
+    for (const sample of samples) {
+      const response = await fetch('/api/admin/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sample)
+      });
+
+      if (!response.ok) {
+        setError('Falha ao inserir produtos ilustrativos.');
+        return;
+      }
+    }
+
+    await load();
+  }
+
   return (
     <main className="mx-auto grid max-w-6xl gap-4 p-4 md:grid-cols-2 md:p-8">
       <form
         id="new-product-form"
-        className="card space-y-2"
+        className="card glass-card space-y-2"
         onSubmit={async (event: FormEvent<HTMLFormElement>) => {
           event.preventDefault();
           const formData = new FormData(event.currentTarget);
@@ -197,12 +255,15 @@ export default function AdminProductsPage() {
         <button className="btn-primary" type="submit">
           Salvar
         </button>
+        <button className="btn-secondary" type="button" onClick={insertSampleProducts}>
+          Inserir produtos ilustrativos
+        </button>
       </form>
 
       <section className="space-y-2">
         <h2 className="text-xl font-bold">Produtos cadastrados</h2>
         {products.map((product) => (
-          <article key={product.id} className="card flex items-center justify-between gap-3">
+          <article key={product.id} className="card glass-card flex items-center justify-between gap-3">
             <div>
               <p className="font-semibold">{product.name}</p>
               <p className="text-sm text-slate-600">{currencyBRL(product.price_cents)}</p>
