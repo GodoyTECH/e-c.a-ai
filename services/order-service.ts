@@ -105,22 +105,31 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
 
     await client.query('COMMIT');
 
-    const whatsappUrl = gerarLinkWhatsApp({
-      ownerNumber: settingsRow.owner_whatsapp_number || '',
-      order: {
-        orderCode: code,
-        customerName: payload.customerName,
-        customerPhone: payload.customerPhone,
-        orderType: payload.orderType,
-        paymentMethod: payload.paymentMethod,
-        address: payload.address || null,
-        notes: payload.notes || null,
-        subtotalCents: subtotal,
-        items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity })),
-        defaultMessage: settingsRow.default_order_message || null,
-        siteUrl: settingsRow.public_site_url || 'https://refrescando.netlify.app/'
-      }
-    });
+await client.query('COMMIT');
+
+let whatsappUrl: string | null = null;
+try {
+  whatsappUrl = gerarLinkWhatsApp({
+    ownerNumber: settingsRow.owner_whatsapp_number || '',
+    order: {
+      orderCode: code,
+      customerName: payload.customerName,
+      customerPhone: payload.customerPhone,
+      orderType: payload.orderType,
+      paymentMethod: payload.paymentMethod,
+      address: payload.address || null,
+      notes: payload.notes || null,
+      subtotalCents: subtotal,
+      items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity })),
+      defaultMessage: settingsRow.default_order_message || null,
+      siteUrl: settingsRow.public_site_url || 'https://refrescando.netlify.app/'
+    }
+  });
+} catch {
+  whatsappUrl = null;
+}
+
+return { ...orderRes.rows[0], whatsappUrl };
 
     return { ...orderRes.rows[0], whatsappUrl };
   } catch (error) {
