@@ -6,7 +6,18 @@ export async function GET() {
   if (!(await isAdminAuthenticated())) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
   }
-  return NextResponse.json(await listAdminProducts());
+
+  try {
+    return NextResponse.json(await listAdminProducts());
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: 'Falha ao listar produtos.',
+        details: error instanceof Error ? error.message : 'Erro interno'
+      },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -14,9 +25,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
   }
 
-  const body = await request.json();
-  const id = await upsertProduct(body);
-  return NextResponse.json({ id }, { status: 201 });
+  try {
+    const body = await request.json();
+    const id = await upsertProduct(body);
+    return NextResponse.json({ id }, { status: body?.id ? 200 : 201 });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: 'Falha ao salvar produto.',
+        details: error instanceof Error ? error.message : 'Erro interno'
+      },
+      { status: 400 }
+    );
+  }
 }
 
 export async function DELETE(request: NextRequest) {

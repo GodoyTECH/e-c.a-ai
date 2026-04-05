@@ -2,6 +2,8 @@ import { ensureDbSchema, getDb } from '@/lib/db';
 import { Product, StoreSettings } from '@/lib/types';
 import { demoCategories, demoProducts, demoSettings } from '@/lib/demo-data';
 
+const DEFAULT_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://refrescando.netlify.app/';
+
 async function ensureDefaultCategories() {
   const db = getDb();
   const existing = await db.query('SELECT id, name, slug, active FROM categories WHERE active = true ORDER BY name ASC');
@@ -211,7 +213,7 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       input.allow_delivery ?? true,
       input.allow_pickup ?? true,
       input.default_order_message ?? null,
-      (input.public_site_url || 'https://refrescando.netlify.app/').trim()
+(input.public_site_url || DEFAULT_SITE_URL).trim()
     ]
   );
 }

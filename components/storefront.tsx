@@ -59,7 +59,7 @@ export function Storefront({ categories, products }: { categories: Category[]; p
         ))}
       </section>
 
-      <Link href="/checkout" className="fixed bottom-4 right-4 rounded-full bg-acai px-5 py-3 text-sm font-bold text-white shadow-xl md:text-base">
+      <Link href="/checkout" className="fixed right-4 top-4 z-40 rounded-full bg-acai px-5 py-3 text-sm font-bold text-white shadow-xl md:right-8 md:top-6 md:text-base">
         Carrinho ({items.reduce((acc, i) => acc + i.quantity, 0)}) · {currencyBRL(totalCents)}
       </Link>
     </main>

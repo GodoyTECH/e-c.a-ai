@@ -18,6 +18,24 @@ type Product = {
 
 type Category = { id: string; name: string };
 
+type FormState = {
+  name: string;
+  description: string;
+  priceInput: string;
+  category_id: string;
+  active: boolean;
+  featured: boolean;
+};
+
+const emptyForm: FormState = {
+  name: '',
+  description: '',
+  priceInput: '',
+  category_id: '',
+  active: true,
+  featured: false
+};
+
 function parsePriceToCents(value: string) {
   const normalized = value.trim().replace(/\s/g, '').replace(',', '.');
   if (!normalized) return null;
@@ -27,10 +45,16 @@ function parsePriceToCents(value: string) {
   return Math.round(numeric * 100);
 }
 
+function centsToPriceInput(cents: number) {
+  return (cents / 100).toFixed(2).replace('.', ',');
+}
+
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [priceInput, setPriceInput] = useState('');
+  const [form, setForm] = useState<FormState>(emptyForm);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [imageFileName, setImageFileName] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -39,6 +63,8 @@ export default function AdminProductsPage() {
     if (categories.length) return categories;
     return demoCategories.map((category) => ({ id: category.id, name: category.name }));
   }, [categories]);
+
+  const isEditing = Boolean(editingProductId);
 
   const load = async () => {
     setError('');
@@ -60,8 +86,17 @@ export default function AdminProductsPage() {
     load();
   }, []);
 
+  function resetForm() {
+    setForm(emptyForm);
+    setEditingProductId(null);
+    setImageFileName(null);
+    setImageBase64(null);
+    setPreview(null);
+  }
+
   async function onSelectImage(file: File | null) {
     if (!file) return;
+    setImageFileName(file.name || null);
     const reader = new FileReader();
     reader.onload = () => {
       const result = String(reader.result || '');
@@ -71,20 +106,20 @@ export default function AdminProductsPage() {
     reader.readAsDataURL(file);
   }
 
-  async function saveProduct(formData: FormData) {
+  async function saveProduct() {
     setError('');
-    const cents = parsePriceToCents(priceInput);
+    const cents = parsePriceToCents(form.priceInput);
     if (cents === null) {
       setError('Preço inválido. Exemplo: 49,90');
       return;
     }
 
-    let uploadedUrl: string | null = null;
+    let uploadedUrl: string | null | undefined = undefined;
     if (imageBase64) {
       const uploadRes = await fetch('/api/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64 })
+        body: JSON.stringify({ imageBase64, fileName: imageFileName, productName: form.name })
       });
 
       if (!uploadRes.ok) {
@@ -97,15 +132,25 @@ export default function AdminProductsPage() {
       uploadedUrl = uploadData.url || null;
     }
 
+    const currentProduct = products.find((item) => item.id === editingProductId);
+
     const payload = {
-      name: String(formData.get('name') || ''),
-      description: String(formData.get('description') || ''),
+      id: editingProductId || undefined,
+      name: form.name,
+      description: form.description,
       price_cents: cents,
-      category_id: String(formData.get('category_id') || ''),
-      active: formData.get('active') === 'on',
-      featured: formData.get('featured') === 'on',
-      main_image_url: uploadedUrl,
-      images: uploadedUrl ? [uploadedUrl] : []
+      category_id: form.category_id,
+      active: form.active,
+      featured: form.featured,
+      main_image_url: uploadedUrl !== undefined ? uploadedUrl : currentProduct?.main_image_url || null,
+      images:
+        uploadedUrl !== undefined
+          ? uploadedUrl
+            ? [uploadedUrl]
+            : []
+          : currentProduct?.main_image_url
+            ? [currentProduct.main_image_url]
+            : []
     };
 
     const response = await fetch('/api/admin/products', {
@@ -115,16 +160,28 @@ export default function AdminProductsPage() {
     });
 
     if (!response.ok) {
-      setError('Não foi possível salvar o produto.');
+      setError(isEditing ? 'Não foi possível atualizar o produto.' : 'Não foi possível salvar o produto.');
       return;
     }
 
-    setPriceInput('');
-    setImageBase64(null);
-    setPreview(null);
-    const form = document.getElementById('new-product-form') as HTMLFormElement | null;
-    form?.reset();
+    resetForm();
     await load();
+  }
+
+  function startEditProduct(product: Product) {
+    setEditingProductId(product.id);
+    setForm({
+      name: product.name,
+      description: product.description,
+      priceInput: centsToPriceInput(product.price_cents),
+      category_id: product.category_id,
+      active: product.active,
+      featured: product.featured
+    });
+    setImageFileName(null);
+    setImageBase64(null);
+    setPreview(product.main_image_url);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   async function insertSampleProducts() {
@@ -191,22 +248,41 @@ export default function AdminProductsPage() {
         className="card glass-card space-y-2"
         onSubmit={async (event: FormEvent<HTMLFormElement>) => {
           event.preventDefault();
-          const formData = new FormData(event.currentTarget);
-          await saveProduct(formData);
+          await saveProduct();
         }}
       >
-        <h1 className="text-xl font-bold">Novo produto</h1>
-        <input className="w-full rounded-xl border px-3 py-2" name="name" placeholder="Nome" required />
-        <textarea className="w-full rounded-xl border px-3 py-2" name="description" placeholder="Descrição" required />
+        <h1 className="text-xl font-bold">{isEditing ? 'Editar produto' : 'Novo produto'}</h1>
         <input
           className="w-full rounded-xl border px-3 py-2"
-          value={priceInput}
-          onChange={(event) => setPriceInput(event.target.value)}
+          name="name"
+          placeholder="Nome"
+          required
+          value={form.name}
+          onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+        />
+        <textarea
+          className="w-full rounded-xl border px-3 py-2"
+          name="description"
+          placeholder="Descrição"
+          required
+          value={form.description}
+          onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
+        />
+        <input
+          className="w-full rounded-xl border px-3 py-2"
+          value={form.priceInput}
+          onChange={(event) => setForm((prev) => ({ ...prev, priceInput: event.target.value }))}
           inputMode="decimal"
           placeholder="Preço em reais (ex: 49,90)"
           required
         />
-        <select className="w-full rounded-xl border px-3 py-2" name="category_id" required>
+        <select
+          className="w-full rounded-xl border px-3 py-2"
+          name="category_id"
+          required
+          value={form.category_id}
+          onChange={(event) => setForm((prev) => ({ ...prev, category_id: event.target.value }))}
+        >
           <option value="">Selecione categoria</option>
           {resolvedCategories.map((category) => (
             <option key={category.id} value={category.id}>
@@ -237,6 +313,7 @@ export default function AdminProductsPage() {
                 onClick={() => {
                   setPreview(null);
                   setImageBase64(null);
+                  setImageFileName(null);
                 }}
               >
                 Remover imagem
@@ -246,18 +323,37 @@ export default function AdminProductsPage() {
         </div>
 
         <label className="flex gap-2">
-          <input type="checkbox" name="active" defaultChecked /> Ativo
+          <input
+            type="checkbox"
+            name="active"
+            checked={form.active}
+            onChange={(event) => setForm((prev) => ({ ...prev, active: event.target.checked }))}
+          />{' '}
+          Ativo
         </label>
         <label className="flex gap-2">
-          <input type="checkbox" name="featured" /> Destaque
+          <input
+            type="checkbox"
+            name="featured"
+            checked={form.featured}
+            onChange={(event) => setForm((prev) => ({ ...prev, featured: event.target.checked }))}
+          />{' '}
+          Destaque
         </label>
         {error && <p className="text-sm text-red-600">{error}</p>}
-        <button className="btn-primary" type="submit">
-          Salvar
-        </button>
-        <button className="btn-secondary" type="button" onClick={insertSampleProducts}>
-          Inserir produtos ilustrativos
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-primary" type="submit">
+            {isEditing ? 'Salvar alterações' : 'Salvar'}
+          </button>
+          {isEditing && (
+            <button className="btn-secondary" type="button" onClick={resetForm}>
+              Cancelar edição
+            </button>
+          )}
+          <button className="btn-secondary" type="button" onClick={insertSampleProducts}>
+            Inserir produtos ilustrativos
+          </button>
+        </div>
       </form>
 
       <section className="space-y-2">
@@ -268,15 +364,23 @@ export default function AdminProductsPage() {
               <p className="font-semibold">{product.name}</p>
               <p className="text-sm text-slate-600">{currencyBRL(product.price_cents)}</p>
             </div>
-            <button
-              className="btn-secondary"
-              onClick={async () => {
-                await fetch(`/api/admin/products?id=${product.id}`, { method: 'DELETE' });
-                await load();
-              }}
-            >
-              Excluir
-            </button>
+            <div className="flex gap-2">
+              <button className="btn-secondary" onClick={() => startEditProduct(product)}>
+                Editar
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={async () => {
+                  await fetch(`/api/admin/products?id=${product.id}`, { method: 'DELETE' });
+                  if (editingProductId === product.id) {
+                    resetForm();
+                  }
+                  await load();
+                }}
+              >
+                Excluir
+              </button>
+            </div>
           </article>
         ))}
       </section>
