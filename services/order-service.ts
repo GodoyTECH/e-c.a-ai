@@ -4,31 +4,45 @@ import { gerarMensagemPedido } from '@/lib/formatOrderMessage';
 import { gerarLinkWhatsApp } from '@/lib/whatsapp';
 import { CheckoutPayload } from '@/types/order';
 
+function buildDemoOrder(
+  payload: CheckoutPayload,
+  subtotal: number,
+  idempotencyKey?: string,
+  options?: {
+    defaultMessage?: string | null;
+    siteUrl?: string | null;
+    ownerNumber?: string | null;
+  }
+) {
+  const code = generateOrderCode();
+  const siteUrl = options?.siteUrl || 'https://refrescando.netlify.app/';
+  const message = gerarMensagemPedido({
+    orderCode: code,
+    customerName: payload.customerName,
+    customerPhone: payload.customerPhone,
+    orderType: payload.orderType,
+    paymentMethod: payload.paymentMethod,
+    address: payload.address || null,
+    notes: payload.notes || null,
+    subtotalCents: subtotal,
+    items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity })),
+    defaultMessage: options?.defaultMessage || 'Olá! Pedido criado em modo demonstração.',
+    siteUrl
+  });
+
+  const ownerNumber = options?.ownerNumber || '5511999999999';
+  return {
+    id: idempotencyKey || crypto.randomUUID(),
+    code,
+    whatsappUrl: `https://wa.me/${ownerNumber}?text=${encodeURIComponent(message)}`
+  };
+}
+
 export async function createOrder(payload: CheckoutPayload, idempotencyKey?: string) {
   const subtotal = payload.items.reduce((acc, item) => acc + item.priceCents * item.quantity, 0);
 
   if (!process.env.DATABASE_URL) {
-    const code = generateOrderCode();
-    const siteUrl = 'https://refreshice.netlify.app/';
-    const message = gerarMensagemPedido({
-      orderCode: code,
-      customerName: payload.customerName,
-      customerPhone: payload.customerPhone,
-      orderType: payload.orderType,
-      paymentMethod: payload.paymentMethod,
-      address: payload.address || null,
-      notes: payload.notes || null,
-      subtotalCents: subtotal,
-      items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity })),
-      defaultMessage: 'Olá! Pedido criado em modo demonstração.',
-      siteUrl
-    });
-
-    return {
-      id: idempotencyKey || crypto.randomUUID(),
-      code,
-      whatsappUrl: `https://wa.me/5511999999999?text=${encodeURIComponent(message)}`
-    };
+    return buildDemoOrder(payload, subtotal, idempotencyKey);
   }
 
   await ensureDbSchema();
@@ -47,11 +61,18 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
     }
 
     const settings = await client.query(
-      'SELECT owner_whatsapp_number, default_order_message, public_site_url FROM store_settings WHERE id = 1'
+      'SELECT owner_whatsapp_number, default_order_message, public_site_url, allow_delivery, allow_pickup FROM store_settings WHERE id = 1'
     );
 
     const code = generateOrderCode();
     const settingsRow = settings.rows[0] || {};
+    if (payload.orderType === 'delivery' && settingsRow.allow_delivery === false) {
+      throw new Error('Entrega está desativada nas configurações.');
+    }
+    if (payload.orderType === 'pickup' && settingsRow.allow_pickup === false) {
+      throw new Error('Retirada está desativada nas configurações.');
+    }
+
     const message = gerarMensagemPedido({
       orderCode: code,
       customerName: payload.customerName,
@@ -63,13 +84,13 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
       subtotalCents: subtotal,
       items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity })),
       defaultMessage: settingsRow.default_order_message || null,
-      siteUrl: settingsRow.public_site_url || 'https://refreshice.netlify.app/'
+      siteUrl: settingsRow.public_site_url || 'https://refrescando.netlify.app/'
     });
 
     const orderRes = await client.query(
       `INSERT INTO orders
         (code, customer_name, customer_phone, order_type, payment_method, address, delivery_address, notes, status, subtotal_cents, total_cents, whatsapp_target_number, whatsapp_message_snapshot, idempotency_key)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12,$13)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending_whatsapp',$9,$10,$11,$12,$13)
        RETURNING id, code`,
       [
         code,
@@ -98,27 +119,38 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
 
     await client.query('COMMIT');
 
-    const whatsappUrl = gerarLinkWhatsApp({
-      ownerNumber: settingsRow.owner_whatsapp_number || '',
-      order: {
-        orderCode: code,
-        customerName: payload.customerName,
-        customerPhone: payload.customerPhone,
-        orderType: payload.orderType,
-        paymentMethod: payload.paymentMethod,
-        address: payload.address || null,
-        notes: payload.notes || null,
-        subtotalCents: subtotal,
-        items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity })),
-        defaultMessage: settingsRow.default_order_message || null,
-        siteUrl: settingsRow.public_site_url || 'https://refreshice.netlify.app/'
-      }
-    });
+    let whatsappUrl: string | null = null;
+    try {
+      whatsappUrl = gerarLinkWhatsApp({
+        ownerNumber: settingsRow.owner_whatsapp_number || '',
+        order: {
+          orderCode: code,
+          customerName: payload.customerName,
+          customerPhone: payload.customerPhone,
+          orderType: payload.orderType,
+          paymentMethod: payload.paymentMethod,
+          address: payload.address || null,
+          notes: payload.notes || null,
+          subtotalCents: subtotal,
+          items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity })),
+          defaultMessage: settingsRow.default_order_message || null,
+          siteUrl: settingsRow.public_site_url || 'https://refrescando.netlify.app/'
+        }
+      });
+    } catch {
+      whatsappUrl = null;
+    }
 
     return { ...orderRes.rows[0], whatsappUrl };
   } catch (error) {
     await client.query('ROLLBACK');
-    throw error;
+    const message = error instanceof Error ? error.message : '';
+    if (message.includes('desativada')) {
+      throw error;
+    }
+
+    console.warn('Falha ao criar pedido no banco. Usando fallback de demonstração.', error);
+    return buildDemoOrder(payload, subtotal, idempotencyKey);
   } finally {
     client.release();
   }

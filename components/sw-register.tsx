@@ -5,7 +5,10 @@ import { useEffect } from 'react';
 export function SwRegister() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
-    navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((registration) => registration.update())
+      .catch(() => undefined);
   }, []);
 
   return null;

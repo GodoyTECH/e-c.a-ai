@@ -28,7 +28,13 @@ export async function POST(request: NextRequest) {
     const idempotencyKey = request.headers.get('x-idempotency-key') || undefined;
     const order = await createOrder(parsed, idempotencyKey);
     return NextResponse.json(order, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: 'Dados inválidos ou erro interno.' }, { status: 400 });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: 'Dados inválidos ou erro interno.',
+        details: error instanceof Error ? error.message : 'Falha inesperada'
+      },
+      { status: 400 }
+    );
   }
 }
