@@ -8,10 +8,17 @@
 
 body {
   @apply bg-cream text-slate-900 antialiased;
+  background-image:
+    radial-gradient(circle at 20% 0%, rgba(157, 78, 221, 0.14), transparent 35%),
+    radial-gradient(circle at 85% 10%, rgba(111, 45, 189, 0.16), transparent 30%);
 }
 
 .card {
   @apply rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5;
+}
+
+.glass-card {
+  @apply bg-white/85 backdrop-blur-sm;
 }
 
 .btn-primary {

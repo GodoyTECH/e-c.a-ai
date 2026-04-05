@@ -108,6 +108,17 @@ Nesse modo, o sistema usa dados simulados (`lib/demo-data.ts`) para:
 - `CLOUDINARY_CLOUD_NAME`: conta cloudinary
 - `CLOUDINARY_UPLOAD_PRESET`: preset upload unsigned
 
+### Checklist rápido (Netlify) para upload e banco
+
+Se você usa apenas GitHub + Netlify + Neon, valide no painel da Netlify:
+
+1. `DATABASE_URL` apontando para o projeto Neon correto.
+2. `ADMIN_PASSWORD` definido em **Production** e **Deploy Previews**.
+3. `CLOUDINARY_CLOUD_NAME` e `CLOUDINARY_UPLOAD_PRESET` definidos no mesmo ambiente do deploy.
+4. Após alterar qualquer variável, faça **novo deploy** (redeploy) para aplicar.
+
+> Se o upload falhar, o endpoint `/api/upload` agora retorna detalhes do erro do Cloudinary para facilitar diagnóstico.
+
 ## WhatsApp direto: como funciona
 
 Arquivos principais:
@@ -128,6 +139,42 @@ Fluxo:
 No painel admin, em **Configurações** (`/admin/settings`), altere o campo:
 
 - `owner_whatsapp_number`
+
+O backend sanitiza o número (remove caracteres não numéricos) antes de gerar `wa.me`.
+As configurações de nome da loja, mensagem padrão e URL pública também entram na mensagem gerada.
+
+## PWA separado: Site e Painel Admin
+
+Agora o projeto expõe **dois atalhos PWA distintos**:
+
+- **Site da loja**: `manifest.webmanifest`
+- **Painel Admin**: `admin/manifest.webmanifest`
+
+Cada um possui:
+
+- `id` e `start_url` diferentes (evita sobreposição de atalho),
+- nome curto diferente,
+- ícone dedicado.
+
+### Ícones prontos para substituir
+
+- Site:
+  - `public/icons/site-icon-192.svg`
+  - `public/icons/site-icon-512.svg`
+- Admin:
+  - `public/icons/admin-icon-192.svg`
+  - `public/icons/admin-icon-512.svg`
+
+Você pode trocar esses arquivos pela arte final sem precisar mudar código.
+
+## Cache e atualização de versão (evitar app antigo)
+
+- Service worker atualizado para versão `refreshice-v3`.
+- Cache antigo é removido automaticamente na ativação.
+- Rotas `/api`, `/admin` e `/_next` não são cacheadas pelo SW.
+- `sw.js` e manifests receberam `Cache-Control: no-store` no `netlify.toml`.
+
+Com isso, a chance de ficar preso em versão antiga diminui bastante em dispositivos móveis.
 
 ## Regras de atendimento (admin)
 
