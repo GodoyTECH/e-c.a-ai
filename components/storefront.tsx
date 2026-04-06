@@ -160,7 +160,7 @@ export function Storefront({
             {showBannerFallback ? (
               <div className="h-full w-full bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.25),transparent_50%)]" />
             ) : (
-              <Image src="/banner.svg" alt="Banner Refrescando" fill priority className="object-cover" onError={() => setShowBannerFallback(true)} />
+              <Image src="/banner.png" alt="Banner Refrescando" fill priority className="object-cover" onError={() => setShowBannerFallback(true)} />
             )}
           </div>
           <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[42%] bg-gradient-to-l from-white/15 to-transparent md:block" />
