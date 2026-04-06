@@ -10,6 +10,35 @@ type ProductRow = Product & {
   optional_toppings?: ProductToppingOption[];
 };
 
+function appendGlobalOptionalToppings(
+  products: ProductRow[],
+  catalogToppings: Array<{ id: string; name: string; price_cents: number; active: boolean; sort_order: number; archived: boolean }>
+) {
+  const activeCatalog = catalogToppings.filter((topping) => topping.active && !topping.archived);
+  if (!activeCatalog.length) return products;
+
+  return products.map((product) => {
+    const currentOptionals = product.optional_toppings || [];
+    const existingIds = new Set(currentOptionals.map((item) => item.topping_id));
+    const highestSortOrder = currentOptionals.reduce((max, item) => Math.max(max, item.sort_order || 0), 0);
+
+    const inheritedOptionals: ProductToppingOption[] = activeCatalog
+      .filter((topping) => !existingIds.has(topping.id))
+      .map((topping, index) => ({
+        topping_id: topping.id,
+        name: topping.name,
+        price_cents: topping.price_cents || 0,
+        active: true,
+        sort_order: highestSortOrder + index + 1
+      }));
+
+    return {
+      ...product,
+      optional_toppings: [...currentOptionals, ...inheritedOptionals]
+    };
+  });
+}
+
 async function ensureDefaultCategories() {
   const db = getDb();
   const existing = await db.query('SELECT id, name, slug, active FROM categories WHERE active = true ORDER BY name ASC');
@@ -143,19 +172,21 @@ export async function listStoreData() {
        ORDER BY p.featured DESC, p.created_at DESC`
     );
     const settingsRes = await db.query(
-      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, store_latitude, store_longitude FROM store_settings WHERE id = 1'
+      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, store_latitude, store_longitude, store_postal_code FROM store_settings WHERE id = 1'
     );
     const toppingsRes = await db.query(
       'SELECT id, name, price_cents, active, sort_order, archived FROM acai_toppings WHERE archived = false ORDER BY sort_order ASC, name ASC'
     );
 
     const products = await hydrateProducts(productsRes.rows as ProductRow[]);
+    const toppingsRows = toppingsRes.rows as Topping[];
+    const productsWithGlobalOptionals = appendGlobalOptionalToppings(products, toppingsRows);
 
     return {
       categories: categoriesRows,
-      products: products.length ? products : demoProducts,
+      products: productsWithGlobalOptionals.length ? productsWithGlobalOptionals : demoProducts,
       settings: settingsRes.rows[0] as StoreSettings,
-      toppings: (toppingsRes.rows as Topping[]).length ? (toppingsRes.rows as Topping[]) : demoToppings
+      toppings: toppingsRows.length ? toppingsRows : demoToppings
     };
   } catch (error) {
     console.warn('Falha ao consultar banco de dados. Entrando em modo demonstração.', error);
@@ -169,14 +200,21 @@ export async function listAdminProducts() {
   try {
     await ensureDbSchema();
     const db = getDb();
-    const res = await db.query(
-      `SELECT p.*, c.name as category_name
-       FROM products p
-       JOIN categories c ON c.id = p.category_id
-       ORDER BY p.created_at DESC`
-    );
-    const products = await hydrateProducts(res.rows as ProductRow[]);
-    return products.length ? products : demoProducts;
+    const [productsRes, toppingsRes] = await Promise.all([
+      db.query(
+        `SELECT p.*, c.name as category_name
+         FROM products p
+         JOIN categories c ON c.id = p.category_id
+         ORDER BY p.created_at DESC`
+      ),
+      db.query(
+        'SELECT id, name, price_cents, active, sort_order, archived FROM acai_toppings WHERE archived = false ORDER BY sort_order ASC, name ASC'
+      )
+    ]);
+
+    const products = await hydrateProducts(productsRes.rows as ProductRow[]);
+    const productsWithGlobalOptionals = appendGlobalOptionalToppings(products, toppingsRes.rows as Topping[]);
+    return productsWithGlobalOptionals.length ? productsWithGlobalOptionals : demoProducts;
   } catch (error) {
     console.warn('Falha ao listar produtos do admin. Retornando dados demo.', error);
     return demoProducts;
@@ -321,7 +359,7 @@ export async function getStoreSettings() {
     await ensureDbSchema();
     const db = getDb();
     const res = await db.query(
-      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, store_latitude, store_longitude FROM store_settings WHERE id=1'
+      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, store_latitude, store_longitude, store_postal_code FROM store_settings WHERE id=1'
     );
     return res.rows[0] as StoreSettings;
   } catch (error) {
@@ -348,9 +386,10 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       freight_per_km_cents,
       store_latitude,
       store_longitude,
+      store_postal_code,
       updated_at
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
     ON CONFLICT (id) DO UPDATE SET
       store_name = EXCLUDED.store_name,
       owner_whatsapp_number = EXCLUDED.owner_whatsapp_number,
@@ -363,6 +402,7 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       freight_per_km_cents = EXCLUDED.freight_per_km_cents,
       store_latitude = EXCLUDED.store_latitude,
       store_longitude = EXCLUDED.store_longitude,
+      store_postal_code = EXCLUDED.store_postal_code,
       updated_at = NOW()`,
     [
       1,
@@ -376,7 +416,8 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       input.free_shipping_enabled ?? true,
       Math.max(0, Number(input.freight_per_km_cents ?? 0)),
       Number.isFinite(Number(input.store_latitude)) ? Number(input.store_latitude) : null,
-      Number.isFinite(Number(input.store_longitude)) ? Number(input.store_longitude) : null
+      Number.isFinite(Number(input.store_longitude)) ? Number(input.store_longitude) : null,
+      (input.store_postal_code || '').replace(/\D/g, '') || null
     ]
   );
 }

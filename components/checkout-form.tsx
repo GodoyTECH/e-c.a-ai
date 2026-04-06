@@ -17,6 +17,12 @@ type AddressLookup = {
   mapsLink: string;
 };
 
+function formatCepValue(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+}
+
 export function CheckoutForm() {
   const { items, totalCents, addItem, removeItem, clear } = useCart();
   const [loading, setLoading] = useState(false);
@@ -25,6 +31,7 @@ export function CheckoutForm() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');
   const [addressData, setAddressData] = useState<AddressLookup | null>(null);
   const [freightEstimateCents, setFreightEstimateCents] = useState(0);
+  const [freightCalculated, setFreightCalculated] = useState(false);
 
   useEffect(() => {
     fetch('/api/settings')
@@ -43,27 +50,62 @@ export function CheckoutForm() {
   const totalWithFreight = useMemo(() => totalCents + (orderType === 'delivery' ? freightEstimateCents : 0), [orderType, totalCents, freightEstimateCents]);
 
   async function calculateFreight(postalCode: string, fullAddress: string) {
+    setFreightCalculated(false);
+
     if (!settings?.freight_enabled || settings?.free_shipping_enabled) {
       setFreightEstimateCents(0);
+      setFreightCalculated(true);
       return;
     }
 
-    if (!settings.store_latitude || !settings.store_longitude || !settings.freight_per_km_cents) {
+    if (!settings.freight_per_km_cents) {
       setFreightEstimateCents(0);
       return;
     }
 
     try {
-      const geocodeRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${fullAddress}, ${postalCode}, Brasil`)}`);
-      const geocodeData = await geocodeRes.json();
-      const first = geocodeData?.[0];
-      if (!first?.lat || !first?.lon) {
+      let originLat = settings.store_latitude != null ? Number(settings.store_latitude) : null;
+      let originLon = settings.store_longitude != null ? Number(settings.store_longitude) : null;
+
+      if ((originLat == null || originLon == null) && settings.store_postal_code) {
+        const storeCepRes = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${settings.store_postal_code}, Brasil`)}`
+        );
+        const storeCepData = await storeCepRes.json();
+        const storeLocation = storeCepData?.[0];
+        if (storeLocation?.lat && storeLocation?.lon) {
+          originLat = Number(storeLocation.lat);
+          originLon = Number(storeLocation.lon);
+        }
+      }
+
+      if (originLat == null || originLon == null) {
         setFreightEstimateCents(0);
+        setFreightCalculated(true);
         return;
       }
 
-      const lat1 = Number(settings.store_latitude);
-      const lon1 = Number(settings.store_longitude);
+      const geocodeUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${fullAddress}, ${postalCode}, Brasil`)}`;
+      const geocodeRes = await fetch(geocodeUrl);
+      const geocodeData = await geocodeRes.json();
+      let first = geocodeData?.[0];
+
+      if (!first?.lat || !first?.lon) {
+        const fallbackRes = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${postalCode}, Brasil`)}`
+        );
+        const fallbackData = await fallbackRes.json();
+        first = fallbackData?.[0];
+      }
+
+      if (!first?.lat || !first?.lon) {
+        setFreightEstimateCents(0);
+        setFreightCalculated(true);
+        return;
+      }
+
+      const lat1 = Number(originLat);
+      const lon1 = Number(originLon);
       const lat2 = Number(first.lat);
       const lon2 = Number(first.lon);
       const toRad = (v: number) => (v * Math.PI) / 180;
@@ -75,8 +117,10 @@ export function CheckoutForm() {
         Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
       const distanceKm = earthKm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
       setFreightEstimateCents(Math.round(distanceKm * settings.freight_per_km_cents));
+      setFreightCalculated(true);
     } catch {
       setFreightEstimateCents(0);
+      setFreightCalculated(true);
     }
   }
 
@@ -97,7 +141,12 @@ export function CheckoutForm() {
 
     const number = String(formData.get('addressNumber') || '').trim();
     const complement = String(formData.get('addressComplement') || '').trim();
-    const addressText = `${data.logradouro || ''}, ${number || 's/n'}${complement ? ` - ${complement}` : ''}, ${data.bairro || ''}, ${data.localidade || ''}-${data.uf || ''}`;
+    if (!data.logradouro || !data.bairro || !data.localidade || !data.uf) {
+      alert('Não foi possível validar o endereço completo com esse CEP. Confira o CEP e tente novamente.');
+      return;
+    }
+
+    const addressText = `${data.logradouro}, ${number || 's/n'}${complement ? ` - ${complement}` : ''}, ${data.bairro}, ${data.localidade}-${data.uf}`;
     const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText + `, CEP ${cep}`)}`;
 
     setAddressData({
@@ -112,6 +161,7 @@ export function CheckoutForm() {
       confirmed: false
     });
 
+    setFreightCalculated(false);
     await calculateFreight(cep, addressText);
   }
 
@@ -233,9 +283,20 @@ export function CheckoutForm() {
           ))}
         </div>
         {orderType === 'delivery' && (
-          <p className="mt-4 text-sm text-slate-700">Frete estimado: {settings?.free_shipping_enabled || !settings?.freight_enabled ? 'Grátis' : currencyBRL(freightEstimateCents)}</p>
+          <div className="mt-4 space-y-1 text-sm text-slate-700">
+            <p>
+              Frete estimado:{' '}
+              {settings?.free_shipping_enabled || !settings?.freight_enabled
+                ? 'Grátis'
+                : freightCalculated
+                  ? currencyBRL(freightEstimateCents)
+                  : 'Informe o CEP para calcular'}
+            </p>
+            <p>Subtotal do pedido: {currencyBRL(totalCents)}</p>
+            <p className="font-semibold">Pedido + frete: {currencyBRL(totalWithFreight)}</p>
+          </div>
         )}
-        <p className="mt-2 text-lg font-bold">Total: {currencyBRL(totalWithFreight)}</p>
+        <p className="mt-2 text-lg font-bold">Total final do pedido: {currencyBRL(totalWithFreight)}</p>
       </section>
 
       <form className="card space-y-3" onSubmit={onSubmit}>
@@ -283,7 +344,18 @@ export function CheckoutForm() {
           <section className="space-y-2 rounded-xl border p-3">
             <h3 className="font-semibold">Endereço de entrega</h3>
             <div className="grid gap-2 sm:grid-cols-2">
-              <input name="postalCode" placeholder="CEP" className="rounded-xl border px-3 py-2" required />
+              <input
+                name="postalCode"
+                placeholder="CEP"
+                className="rounded-xl border px-3 py-2"
+                required
+                maxLength={9}
+                inputMode="numeric"
+                pattern="^\d{5}-?\d{3}$"
+                onChange={(event) => {
+                  event.currentTarget.value = formatCepValue(event.currentTarget.value);
+                }}
+              />
               <input name="addressNumber" placeholder="Número" className="rounded-xl border px-3 py-2" required />
             </div>
             <input name="addressComplement" placeholder="Complemento (opcional)" className="w-full rounded-xl border px-3 py-2" />
@@ -301,7 +373,7 @@ export function CheckoutForm() {
         <textarea name="notes" placeholder="Observações" className="w-full rounded-xl border px-3 py-2" rows={3} />
 
         <button className="btn-primary w-full" disabled={loading || items.length === 0}>
-          {loading ? 'Processando...' : 'Finalizar pedido no WhatsApp'}
+          {loading ? 'Processando...' : 'Deseja finalizar? Enviar pedido no WhatsApp'}
         </button>
       </form>
     </main>

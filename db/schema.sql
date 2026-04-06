@@ -197,3 +197,4 @@ ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS free_shipping_enabled BOOLEA
 ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS freight_per_km_cents INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS store_latitude DOUBLE PRECISION;
 ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS store_longitude DOUBLE PRECISION;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS store_postal_code TEXT;

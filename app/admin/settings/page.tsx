@@ -14,6 +14,7 @@ type SettingsForm = {
   freight_per_km_cents: number;
   store_latitude: string;
   store_longitude: string;
+  store_postal_code: string;
 };
 
 const DEFAULT_PUBLIC_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://refrescando.netlify.app/';
@@ -29,7 +30,8 @@ const defaultForm: SettingsForm = {
   free_shipping_enabled: true,
   freight_per_km_cents: 0,
   store_latitude: '',
-  store_longitude: ''
+  store_longitude: '',
+  store_postal_code: ''
 };
 
 const MARKETING_MESSAGE_KEY = 'marketing-message-v1';
@@ -71,7 +73,8 @@ ${siteUrl}`;
       free_shipping_enabled: typeof data.free_shipping_enabled === 'boolean' ? data.free_shipping_enabled : true,
       freight_per_km_cents: Number(data.freight_per_km_cents || 0),
       store_latitude: data.store_latitude ? String(data.store_latitude) : '',
-      store_longitude: data.store_longitude ? String(data.store_longitude) : ''
+      store_longitude: data.store_longitude ? String(data.store_longitude) : '',
+      store_postal_code: data.store_postal_code || ''
     }));
   }
 
@@ -92,7 +95,8 @@ ${siteUrl}`;
       owner_whatsapp_number: form.owner_whatsapp_number.replace(/\D/g, ''),
       public_site_url: form.public_site_url.trim(),
       store_latitude: form.store_latitude ? Number(form.store_latitude) : null,
-      store_longitude: form.store_longitude ? Number(form.store_longitude) : null
+      store_longitude: form.store_longitude ? Number(form.store_longitude) : null,
+      store_postal_code: form.store_postal_code.replace(/\D/g, '')
     };
 
     const res = await fetch('/api/admin/settings', {
@@ -129,11 +133,17 @@ ${siteUrl}`;
           <label className="flex items-center gap-2"><input type="checkbox" checked={form.freight_enabled} onChange={(e) => setForm({ ...form, freight_enabled: e.target.checked })} /> Frete ativo</label>
           <label className="flex items-center gap-2"><input type="checkbox" checked={form.free_shipping_enabled} onChange={(e) => setForm({ ...form, free_shipping_enabled: e.target.checked })} /> Frete grátis</label>
           <input className="w-full rounded-xl border px-3 py-2" type="number" min={0} value={form.freight_per_km_cents} onChange={(e) => setForm({ ...form, freight_per_km_cents: Number(e.target.value) })} placeholder="Valor por km (em centavos)" />
+          <input
+            className="w-full rounded-xl border px-3 py-2"
+            value={form.store_postal_code}
+            onChange={(e) => setForm({ ...form, store_postal_code: e.target.value })}
+            placeholder="CEP da loja (opcional para cálculo automático)"
+          />
           <div className="grid gap-2 sm:grid-cols-2">
             <input className="w-full rounded-xl border px-3 py-2" value={form.store_latitude} onChange={(e) => setForm({ ...form, store_latitude: e.target.value })} placeholder="Latitude da loja" />
             <input className="w-full rounded-xl border px-3 py-2" value={form.store_longitude} onChange={(e) => setForm({ ...form, store_longitude: e.target.value })} placeholder="Longitude da loja" />
           </div>
-          <p className="text-xs text-slate-500">Para cálculo automático, preencha latitude/longitude da loja. Sem coordenadas, o frete fica em R$ 0,00.</p>
+          <p className="text-xs text-slate-500">Você pode informar CEP da loja ou latitude/longitude. Sem localização da loja, o frete fica em R$ 0,00.</p>
         </div>
 
         <button className="btn-primary" disabled={loading} onClick={onSave}>{loading ? 'Salvando...' : 'Salvar configurações'}</button>

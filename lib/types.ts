@@ -85,4 +85,5 @@ export type StoreSettings = {
   freight_per_km_cents?: number;
   store_latitude?: number | null;
   store_longitude?: number | null;
+  store_postal_code?: string | null;
 };
