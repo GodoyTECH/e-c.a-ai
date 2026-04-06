@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     id: '/?source=pwa-site',
     name: 'Refresh Ice',
-    short_name: 'Loja Açaí',
+    short_name: 'Refrescando',
     description: 'Loja de açaí com checkout rápido',
     start_url: '/?source=pwa-site',
     scope: '/',

@@ -14,5 +14,6 @@ export type CheckoutPayload = {
     name: string;
     quantity: number;
     priceCents: number;
+    toppings: string[];
   }[];
 };

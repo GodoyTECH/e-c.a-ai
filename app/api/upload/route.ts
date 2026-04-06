@@ -1,182 +1,74 @@
-import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
-
-type UploadRequest = {
-  imageBase64?: string;
-  fileName?: string;
-  productName?: string;
-};
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
-function sanitizeDisplayName(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[\\/]/g, ' ')
-    .replace(/[^\w\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .slice(0, 80);
-}
-
-function sanitizeSlug(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[\\/]/g, '-')
-    .replace(/[^a-z0-9-\s_]/g, '')
-    .trim()
-    .replace(/[\s_]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 60);
-}
-
-function isCloudinarySigned() {
-  return Boolean(process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
-}
-
-function parseImageDataUrl(value: string) {
-  const match = value.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
-  if (!match) return null;
-
-  const mimeType = match[1].toLowerCase();
-  const base64Payload = match[2];
-  const sizeBytes = Math.floor((base64Payload.length * 3) / 4);
-
-  return { mimeType, sizeBytes };
-}
-
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as UploadRequest;
-    const imageBase64 = body?.imageBase64;
-
-    if (!imageBase64 || typeof imageBase64 !== 'string') {
-      return NextResponse.json({ error: 'Imagem inválida.' }, { status: 400 });
-    }
-
-    if (!process.env.CLOUDINARY_CLOUD_NAME) {
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_UPLOAD_PRESET) {
       return NextResponse.json(
         {
           error: 'Cloudinary não configurado.',
-          missing: { CLOUDINARY_CLOUD_NAME: true }
+          missing: {
+            CLOUDINARY_CLOUD_NAME: !process.env.CLOUDINARY_CLOUD_NAME,
+            CLOUDINARY_UPLOAD_PRESET: !process.env.CLOUDINARY_UPLOAD_PRESET
+          }
         },
         { status: 400 }
       );
     }
 
-    const parsedImage = parseImageDataUrl(imageBase64);
-    if (!parsedImage) {
-      return NextResponse.json(
-        {
-          error: 'Imagem inválida.',
-          details: 'Formato de imagem não suportado. Envie um arquivo de imagem válido.'
-        },
-        { status: 400 }
-      );
+    const incoming = await request.formData();
+    const file = incoming.get('file');
+
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: 'Arquivo de imagem não enviado.' }, { status: 400 });
     }
 
-    if (!parsedImage.mimeType.startsWith('image/')) {
-      return NextResponse.json(
-        {
-          error: 'Imagem inválida.',
-          details: 'Apenas imagens são permitidas.'
-        },
-        { status: 400 }
-      );
+    if (!file.type.startsWith('image/')) {
+      return NextResponse.json({ error: 'Apenas imagens são permitidas.' }, { status: 400 });
     }
 
-    if (parsedImage.sizeBytes > MAX_IMAGE_BYTES) {
-      return NextResponse.json(
-        {
-          error: 'Imagem inválida.',
-          details: 'A imagem excede o limite de 8MB.'
-        },
-        { status: 400 }
-      );
+    if (file.size > MAX_IMAGE_BYTES) {
+      return NextResponse.json({ error: 'A imagem excede o limite de 8MB.' }, { status: 400 });
     }
 
-    const rawBaseName = body.productName || body.fileName || 'produto';
-    const displayName = sanitizeDisplayName(rawBaseName) || 'produto';
-    const slugBase = sanitizeSlug(rawBaseName) || 'produto';
-    const timestamp = Math.floor(Date.now() / 1000);
-    const uniqueSuffix = String(Date.now());
-    const publicId = `${slugBase}-${uniqueSuffix}`;
-    const folder = 'acai-da-casa/produtos';
-    const endpoint = `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload`;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', process.env.CLOUDINARY_UPLOAD_PRESET);
 
-    const params = new URLSearchParams({
-      file: imageBase64
-    });
-
-    const signed = isCloudinarySigned();
-
-    if (signed) {
-      const signatureBase = [
-        `asset_folder=${folder}`,
-        `display_name=${displayName}`,
-        `folder=${folder}`,
-        `public_id=${publicId}`,
-        `timestamp=${timestamp}`
-      ].join('&');
-
-      const signature = crypto
-        .createHash('sha1')
-        .update(`${signatureBase}${process.env.CLOUDINARY_API_SECRET}`)
-        .digest('hex');
-
-      params.set('folder', folder);
-      params.set('asset_folder', folder);
-      params.set('display_name', displayName);
-      params.set('public_id', publicId);
-      params.set('timestamp', String(timestamp));
-      params.set('api_key', process.env.CLOUDINARY_API_KEY as string);
-      params.set('signature', signature);
-    } else {
-      if (!process.env.CLOUDINARY_UPLOAD_PRESET) {
-        return NextResponse.json(
-          {
-            error: 'Cloudinary não configurado.',
-            missing: { CLOUDINARY_UPLOAD_PRESET: true }
-          },
-          { status: 400 }
-        );
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload`,
+      {
+        method: 'POST',
+        body: formData
       }
-      params.set('upload_preset', process.env.CLOUDINARY_UPLOAD_PRESET);
-    }
+    );
 
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      body: params
-    });
+    const raw = await response.text();
+    const data = raw ? JSON.parse(raw) : {};
 
-    const json = await response.json();
     if (!response.ok) {
-      const cloudinaryMessage = json?.error?.message || 'Erro desconhecido do Cloudinary.';
-      console.error('Falha no upload Cloudinary', {
-        status: response.status,
-        message: cloudinaryMessage,
-        signed,
-        displayName: signed ? displayName : undefined,
-        folder: signed ? folder : undefined,
-        publicId: params.get('public_id')
-      });
-
+      const cloudinaryMessage = data?.error?.message || 'Erro desconhecido do Cloudinary.';
       return NextResponse.json(
         {
           error: 'Falha no upload para Cloudinary.',
           details: cloudinaryMessage
         },
-        { status: 400 }
+        { status: response.status }
       );
     }
 
-    return NextResponse.json({ url: json.secure_url, public_id: json.public_id });
+    if (!data?.secure_url) {
+      return NextResponse.json(
+        {
+          error: 'Cloudinary não retornou URL da imagem.'
+        },
+        { status: 502 }
+      );
+    }
+
+    return NextResponse.json({ url: data.secure_url, public_id: data.public_id ?? null }, { status: 200 });
   } catch (error) {
-    console.error('Erro inesperado no upload', error);
     return NextResponse.json(
       {
         error: 'Erro inesperado ao processar upload.',

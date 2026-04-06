@@ -19,11 +19,19 @@ export type Product = {
 };
 
 export type CartItem = {
+  lineId: string;
   productId: string;
   name: string;
   priceCents: number;
   imageUrl?: string | null;
   quantity: number;
+  toppings: string[];
+};
+
+export type Topping = {
+  id: string;
+  name: string;
+  active: boolean;
 };
 
 export type PaymentMethod = 'pix' | 'credit_card' | 'debit_card';

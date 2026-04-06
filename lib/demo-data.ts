@@ -1,4 +1,4 @@
-import { Category, Product, StoreSettings } from '@/lib/types';
+import { Category, Product, StoreSettings, Topping } from '@/lib/types';
 
 export const demoCategories: Category[] = [
   { id: 'cat-acai', name: 'Açaí', slug: 'acai', active: true },
@@ -58,10 +58,23 @@ export const demoProducts: Product[] = [
 ];
 
 export const demoSettings: StoreSettings = {
-  store_name: 'Açaí da Casa (Demo)',
+  store_name: 'Refrescando (Demo)',
   owner_whatsapp_number: '5511999999999',
   allow_delivery: true,
   allow_pickup: true,
   default_order_message: 'Olá! Quero confirmar meu pedido demo.',
   public_site_url: 'https://refrescando.netlify.app/'
 };
+
+export const demoToppings: Topping[] = [
+  { id: 'tp-1', name: 'Leite condensado', active: true },
+  { id: 'tp-2', name: 'Leite em pó', active: true },
+  { id: 'tp-3', name: 'Granola', active: true },
+  { id: 'tp-4', name: 'Paçoca', active: true },
+  { id: 'tp-5', name: 'Banana', active: true },
+  { id: 'tp-6', name: 'Morango', active: true },
+  { id: 'tp-7', name: 'Nutella', active: true },
+  { id: 'tp-8', name: 'Mel', active: true },
+  { id: 'tp-9', name: 'Ovomaltine', active: true },
+  { id: 'tp-10', name: 'Coco ralado', active: true }
+];

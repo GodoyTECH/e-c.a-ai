@@ -6,7 +6,7 @@ import { createContext, useContext, useMemo, useState } from 'react';
 type CartContextType = {
   items: CartItem[];
   addItem: (item: Omit<CartItem, 'quantity'>) => void;
-  removeItem: (productId: string) => void;
+  removeItem: (lineId: string) => void;
   clear: () => void;
   totalCents: number;
 };
@@ -18,19 +18,19 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addItem = (item: Omit<CartItem, 'quantity'>) => {
     setItems((prev) => {
-      const existing = prev.find((i) => i.productId === item.productId);
+      const existing = prev.find((i) => i.lineId === item.lineId);
       if (existing) {
-        return prev.map((i) => (i.productId === item.productId ? { ...i, quantity: i.quantity + 1 } : i));
+        return prev.map((i) => (i.lineId === item.lineId ? { ...i, quantity: i.quantity + 1 } : i));
       }
       return [...prev, { ...item, quantity: 1 }];
     });
   };
 
-  const removeItem = (productId: string) => {
+  const removeItem = (lineId: string) => {
     setItems((prev) =>
       prev
         .map((item) =>
-          item.productId === productId
+          item.lineId === lineId
             ? {
                 ...item,
                 quantity: item.quantity - 1

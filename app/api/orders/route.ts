@@ -15,7 +15,8 @@ const schema = z.object({
         productId: z.string().uuid(),
         name: z.string(),
         priceCents: z.number().int().nonnegative(),
-        quantity: z.number().int().positive()
+        quantity: z.number().int().positive(),
+        toppings: z.array(z.string()).default([])
       })
     )
     .min(1)

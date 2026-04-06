@@ -58,12 +58,19 @@ CREATE TABLE IF NOT EXISTS order_items (
   quantity INTEGER NOT NULL CHECK (quantity > 0),
   unit_price_cents INTEGER NOT NULL CHECK (unit_price_cents >= 0),
   unit_price_snapshot INTEGER,
-  line_total INTEGER
+  line_total INTEGER,
+  toppings_snapshot TEXT
+);
+
+CREATE TABLE IF NOT EXISTS acai_toppings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  active BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 CREATE TABLE IF NOT EXISTS store_settings (
   id SMALLINT PRIMARY KEY DEFAULT 1,
-  store_name TEXT NOT NULL DEFAULT 'Açaí da Casa',
+  store_name TEXT NOT NULL DEFAULT 'Refrescando',
   owner_whatsapp_number TEXT,
   allow_delivery BOOLEAN NOT NULL DEFAULT TRUE,
   allow_pickup BOOLEAN NOT NULL DEFAULT TRUE,
@@ -100,6 +107,7 @@ ALTER TABLE orders ADD CONSTRAINT orders_status_check CHECK (status IN ('pending
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS product_name_snapshot TEXT;
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS unit_price_snapshot INTEGER;
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS line_total INTEGER;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS toppings_snapshot TEXT;
 
 UPDATE order_items SET product_name_snapshot = COALESCE(product_name_snapshot, name);
 UPDATE order_items SET unit_price_snapshot = COALESCE(unit_price_snapshot, unit_price_cents);
@@ -107,8 +115,23 @@ UPDATE order_items SET line_total = COALESCE(line_total, unit_price_cents * quan
 
 ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS public_site_url TEXT;
 UPDATE store_settings SET public_site_url = COALESCE(NULLIF(public_site_url, ''), 'https://refrescando.netlify.app/');
+UPDATE store_settings SET store_name = COALESCE(NULLIF(store_name, ''), 'Refrescando');
 ALTER TABLE store_settings ALTER COLUMN public_site_url SET DEFAULT 'https://refrescando.netlify.app/';
 ALTER TABLE store_settings ALTER COLUMN public_site_url SET NOT NULL;
+ALTER TABLE store_settings ALTER COLUMN store_name SET DEFAULT 'Refrescando';
+
+INSERT INTO acai_toppings (name, active) VALUES
+  ('Leite condensado', true),
+  ('Leite em pó', true),
+  ('Granola', true),
+  ('Paçoca', true),
+  ('Banana', true),
+  ('Morango', true),
+  ('Nutella', true),
+  ('Mel', true),
+  ('Ovomaltine', true),
+  ('Coco ralado', true)
+ON CONFLICT (name) DO NOTHING;
 
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);

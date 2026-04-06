@@ -21,7 +21,7 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
       address: payload.address || null,
       notes: payload.notes || null,
       subtotalCents: subtotal,
-      items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity })),
+      items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity, toppings: item.toppings })),
       defaultMessage: 'Olá! Pedido criado em modo demonstração.',
       siteUrl
     });
@@ -70,7 +70,7 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
       address: payload.address || null,
       notes: payload.notes || null,
       subtotalCents: subtotal,
-      items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity })),
+      items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity, toppings: item.toppings })),
       defaultMessage: settingsRow.default_order_message || null,
       siteUrl: settingsRow.public_site_url || DEFAULT_SITE_URL
     });
@@ -99,9 +99,19 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
 
     for (const item of payload.items) {
       await client.query(
-        `INSERT INTO order_items (order_id, product_id, name, product_name_snapshot, quantity, unit_price_cents, unit_price_snapshot, line_total)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [orderRes.rows[0].id, item.productId, item.name, item.name, item.quantity, item.priceCents, item.priceCents, item.priceCents * item.quantity]
+        `INSERT INTO order_items (order_id, product_id, name, product_name_snapshot, quantity, unit_price_cents, unit_price_snapshot, line_total, toppings_snapshot)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [
+          orderRes.rows[0].id,
+          item.productId,
+          item.name,
+          item.name,
+          item.quantity,
+          item.priceCents,
+          item.priceCents,
+          item.priceCents * item.quantity,
+          item.toppings.length ? item.toppings.join(', ') : null
+        ]
       );
     }
 
@@ -120,7 +130,7 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
           address: payload.address || null,
           notes: payload.notes || null,
           subtotalCents: subtotal,
-          items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity })),
+          items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity, toppings: item.toppings })),
           defaultMessage: settingsRow.default_order_message || null,
           siteUrl: settingsRow.public_site_url || DEFAULT_SITE_URL
         }

@@ -5,7 +5,7 @@ import { PwaInstallCard } from '@/components/pwa-install-card';
 import { SwRegister } from '@/components/sw-register';
 
 export const metadata = {
-  title: 'Açaí da Casa',
+  title: 'Refrescando',
   description: 'Cardápio digital com checkout e painel admin'
 };
 

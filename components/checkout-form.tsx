@@ -99,14 +99,26 @@ export function CheckoutForm() {
         <h2 className="text-xl font-bold">Seu carrinho</h2>
         <div className="mt-4 space-y-3">
           {items.map((item) => (
-            <div key={item.productId} className="flex items-center justify-between">
-              <p>{item.name}</p>
+            <div key={item.lineId} className="flex items-center justify-between">
+              <div>
+                <p>{item.name}</p>
+                {item.toppings.length > 0 && <p className="text-xs text-slate-500">Acompanhamentos: {item.toppings.join(', ')}</p>}
+              </div>
               <div className="flex items-center gap-2">
-                <button className="btn-secondary" onClick={() => removeItem(item.productId)} type="button">-</button>
+                <button className="btn-secondary" onClick={() => removeItem(item.lineId)} type="button">-</button>
                 <span>{item.quantity}</span>
                 <button
                   className="btn-secondary"
-                  onClick={() => addItem({ productId: item.productId, name: item.name, priceCents: item.priceCents, imageUrl: item.imageUrl })}
+                  onClick={() =>
+                    addItem({
+                      lineId: item.lineId,
+                      productId: item.productId,
+                      name: item.name,
+                      priceCents: item.priceCents,
+                      imageUrl: item.imageUrl,
+                      toppings: item.toppings
+                    })
+                  }
                   type="button"
                 >
                   +
