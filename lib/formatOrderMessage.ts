@@ -17,8 +17,13 @@ type MessageOrder = {
   orderType: 'delivery' | 'pickup';
   paymentMethod: PaymentMethod;
   address?: string | null;
+  postalCode?: string | null;
+  mapsLink?: string | null;
   notes?: string | null;
   subtotalCents: number;
+  freightCents?: number;
+  totalCents?: number;
+  createdAt?: string;
   items: MessageOrderItem[];
   defaultMessage?: string | null;
   siteUrl?: string | null;
@@ -31,13 +36,14 @@ const paymentMethodLabels: Record<PaymentMethod, string> = {
 };
 
 export function gerarMensagemPedido(order: MessageOrder) {
+  const totalCents = order.totalCents ?? order.subtotalCents;
   const lines = [
     order.defaultMessage?.trim() || 'Olá! Quero confirmar meu pedido.',
     '',
     order.orderCode ? `Pedido: #${order.orderCode}` : null,
     `Cliente: ${order.customerName}`,
     `Telefone: ${order.customerPhone}`,
-    `Data: ${new Date().toLocaleString('pt-BR')}`,
+    `Data: ${new Date(order.createdAt || Date.now()).toLocaleString('pt-BR')}`,
     '',
     'Itens:'
   ].filter(Boolean) as string[];
@@ -70,13 +76,22 @@ export function gerarMensagemPedido(order: MessageOrder) {
   lines.push(
     '',
     `Subtotal: ${currencyBRL(order.subtotalCents)}`,
-    `Total: ${currencyBRL(order.subtotalCents)}`,
+    `Frete: ${currencyBRL(order.freightCents || 0)}`,
+    `Total: ${currencyBRL(totalCents)}`,
     `Pagamento: ${paymentMethodLabels[order.paymentMethod]}`,
     `Tipo: ${order.orderType === 'delivery' ? 'Entrega' : 'Retirada'}`
   );
 
+  if (order.orderType === 'delivery' && order.postalCode?.trim()) {
+    lines.push(`CEP: ${order.postalCode.trim()}`);
+  }
+
   if (order.orderType === 'delivery' && order.address?.trim()) {
-    lines.push(`Endereço: ${order.address.trim()}`);
+    lines.push(`Endereço confirmado: ${order.address.trim()}`);
+  }
+
+  if (order.mapsLink?.trim()) {
+    lines.push(`Maps: ${order.mapsLink.trim()}`);
   }
 
   if (order.notes?.trim()) {

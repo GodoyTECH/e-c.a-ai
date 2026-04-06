@@ -83,5 +83,10 @@ export const demoSettings: StoreSettings = {
   allow_delivery: true,
   allow_pickup: true,
   default_order_message: 'Olá! Quero confirmar meu pedido demo.',
-  public_site_url: 'https://refrescando.netlify.app/'
+  public_site_url: 'https://refrescando.netlify.app/',
+  freight_enabled: false,
+  free_shipping_enabled: true,
+  freight_per_km_cents: 0,
+  store_latitude: null,
+  store_longitude: null
 };

@@ -8,6 +8,8 @@ const DEFAULT_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://refrescand
 
 export async function createOrder(payload: CheckoutPayload, idempotencyKey?: string) {
   const subtotal = payload.items.reduce((acc, item) => acc + item.priceCents * item.quantity, 0);
+  const freightCents = Math.max(0, payload.freightCents || 0);
+  const totalCents = subtotal + freightCents;
 
   if (!process.env.DATABASE_URL) {
     const code = generateOrderCode();
@@ -19,8 +21,13 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
       orderType: payload.orderType,
       paymentMethod: payload.paymentMethod,
       address: payload.address || null,
+      postalCode: payload.postalCode || null,
+      mapsLink: payload.mapsLink || null,
       notes: payload.notes || null,
       subtotalCents: subtotal,
+      freightCents,
+      totalCents,
+      createdAt: new Date().toISOString(),
       items: payload.items.map((item) => ({
         name: item.name,
         quantity: item.quantity,
@@ -68,6 +75,8 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
       throw new Error('Retirada está desativada nas configurações.');
     }
 
+    const createdAt = new Date().toISOString();
+
     const message = gerarMensagemPedido({
       orderCode: code,
       customerName: payload.customerName,
@@ -75,8 +84,13 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
       orderType: payload.orderType,
       paymentMethod: payload.paymentMethod,
       address: payload.address || null,
+      postalCode: payload.postalCode || null,
+      mapsLink: payload.mapsLink || null,
       notes: payload.notes || null,
       subtotalCents: subtotal,
+      freightCents,
+      totalCents,
+      createdAt,
       items: payload.items.map((item) => ({
         name: item.name,
         quantity: item.quantity,
@@ -91,8 +105,8 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
 
     const orderRes = await client.query(
       `INSERT INTO orders
-        (code, customer_name, customer_phone, order_type, payment_method, address, delivery_address, notes, status, subtotal_cents, total_cents, whatsapp_target_number, whatsapp_message_snapshot, idempotency_key)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending_whatsapp',$9,$10,$11,$12,$13)
+        (code, customer_name, customer_phone, order_type, payment_method, address, delivery_address, postal_code, maps_link, address_confirmed, notes, status, subtotal_cents, freight_cents, total_cents, whatsapp_target_number, whatsapp_message_snapshot, idempotency_key)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending_whatsapp',$12,$13,$14,$15,$16,$17)
        RETURNING id, code`,
       [
         code,
@@ -102,9 +116,13 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
         payload.paymentMethod,
         payload.address || null,
         payload.address || null,
+        payload.postalCode || null,
+        payload.mapsLink || null,
+        payload.addressConfirmed ?? false,
         payload.notes || null,
         subtotal,
-        subtotal,
+        freightCents,
+        totalCents,
         settingsRow.owner_whatsapp_number || null,
         message,
         idempotencyKey || null
@@ -150,8 +168,13 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
           orderType: payload.orderType,
           paymentMethod: payload.paymentMethod,
           address: payload.address || null,
+          postalCode: payload.postalCode || null,
+          mapsLink: payload.mapsLink || null,
           notes: payload.notes || null,
           subtotalCents: subtotal,
+          freightCents,
+          totalCents,
+          createdAt,
           items: payload.items.map((item) => ({
             name: item.name,
             quantity: item.quantity,
@@ -184,7 +207,7 @@ export async function listOrders() {
     await ensureDbSchema();
     const db = getDb();
     const orders = await db.query(
-      `SELECT id, code, customer_name, customer_phone, order_type, payment_method, status, total_cents, notes, delivery_address, created_at
+      `SELECT id, code, customer_name, customer_phone, order_type, payment_method, status, subtotal_cents, freight_cents, total_cents, notes, delivery_address, postal_code, maps_link, created_at
        FROM orders
        ORDER BY created_at DESC`
     );
@@ -210,7 +233,11 @@ export async function listOrders() {
       groupedItems.set(row.order_id, list);
     }
 
-    return orders.rows.map((order) => ({ ...order, items: groupedItems.get(order.id) || [] }));
+    return orders.rows.map((order) => ({
+      ...order,
+      delivery_priority_score: order.order_type === 'delivery' ? 1 : 99,
+      items: groupedItems.get(order.id) || []
+    }));
   } catch (error) {
     console.warn('Falha ao listar pedidos. Retornando lista vazia.', error);
     return [];

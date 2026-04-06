@@ -8,6 +8,10 @@ export type CheckoutPayload = {
   orderType: OrderType;
   paymentMethod: PaymentMethod;
   address?: string;
+  postalCode?: string | null;
+  mapsLink?: string | null;
+  addressConfirmed?: boolean;
+  freightCents?: number;
   notes?: string;
   items: {
     productId: string;

@@ -8,6 +8,10 @@ const schema = z.object({
   orderType: z.enum(['delivery', 'pickup']),
   paymentMethod: z.enum(['pix', 'credit_card', 'debit_card']),
   address: z.string().optional(),
+  postalCode: z.string().nullable().optional(),
+  mapsLink: z.string().url().nullable().optional(),
+  addressConfirmed: z.boolean().optional(),
+  freightCents: z.number().int().nonnegative().optional(),
   notes: z.string().optional(),
   items: z
     .array(

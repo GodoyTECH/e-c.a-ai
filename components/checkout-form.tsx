@@ -2,8 +2,20 @@
 
 import { currencyBRL } from '@/lib/utils';
 import { useCart } from './cart-context';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { PaymentMethod, StoreSettings } from '@/lib/types';
+
+type AddressLookup = {
+  cep: string;
+  street: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  number: string;
+  complement: string;
+  confirmed: boolean;
+  mapsLink: string;
+};
 
 export function CheckoutForm() {
   const { items, totalCents, addItem, removeItem, clear } = useCart();
@@ -11,6 +23,8 @@ export function CheckoutForm() {
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [orderType, setOrderType] = useState<'delivery' | 'pickup'>('delivery');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');
+  const [addressData, setAddressData] = useState<AddressLookup | null>(null);
+  const [freightEstimateCents, setFreightEstimateCents] = useState(0);
 
   useEffect(() => {
     fetch('/api/settings')
@@ -26,6 +40,81 @@ export function CheckoutForm() {
     settings?.allow_pickup ? { label: 'Retirada', value: 'pickup' as const } : null
   ].filter(Boolean) as { label: string; value: 'delivery' | 'pickup' }[];
 
+  const totalWithFreight = useMemo(() => totalCents + (orderType === 'delivery' ? freightEstimateCents : 0), [orderType, totalCents, freightEstimateCents]);
+
+  async function calculateFreight(postalCode: string, fullAddress: string) {
+    if (!settings?.freight_enabled || settings?.free_shipping_enabled) {
+      setFreightEstimateCents(0);
+      return;
+    }
+
+    if (!settings.store_latitude || !settings.store_longitude || !settings.freight_per_km_cents) {
+      setFreightEstimateCents(0);
+      return;
+    }
+
+    try {
+      const geocodeRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${fullAddress}, ${postalCode}, Brasil`)}`);
+      const geocodeData = await geocodeRes.json();
+      const first = geocodeData?.[0];
+      if (!first?.lat || !first?.lon) {
+        setFreightEstimateCents(0);
+        return;
+      }
+
+      const lat1 = Number(settings.store_latitude);
+      const lon1 = Number(settings.store_longitude);
+      const lat2 = Number(first.lat);
+      const lon2 = Number(first.lon);
+      const toRad = (v: number) => (v * Math.PI) / 180;
+      const earthKm = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const distanceKm = earthKm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+      setFreightEstimateCents(Math.round(distanceKm * settings.freight_per_km_cents));
+    } catch {
+      setFreightEstimateCents(0);
+    }
+  }
+
+  async function onLookupCep(form: HTMLFormElement) {
+    const formData = new FormData(form);
+    const cep = String(formData.get('postalCode') || '').replace(/\D/g, '');
+    if (cep.length !== 8) {
+      alert('CEP inválido. Digite 8 números.');
+      return;
+    }
+
+    const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+    const data = await res.json();
+    if (data.erro) {
+      alert('CEP não encontrado.');
+      return;
+    }
+
+    const number = String(formData.get('addressNumber') || '').trim();
+    const complement = String(formData.get('addressComplement') || '').trim();
+    const addressText = `${data.logradouro || ''}, ${number || 's/n'}${complement ? ` - ${complement}` : ''}, ${data.bairro || ''}, ${data.localidade || ''}-${data.uf || ''}`;
+    const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText + `, CEP ${cep}`)}`;
+
+    setAddressData({
+      cep,
+      street: data.logradouro || '',
+      neighborhood: data.bairro || '',
+      city: data.localidade || '',
+      state: data.uf || '',
+      number,
+      complement,
+      mapsLink,
+      confirmed: false
+    });
+
+    await calculateFreight(cep, addressText);
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!items.length) {
@@ -40,15 +129,37 @@ export function CheckoutForm() {
       return;
     }
 
+    if (orderType === 'delivery' && (!addressData?.confirmed || !addressData.mapsLink)) {
+      alert('Confirme o endereço no mapa antes de finalizar.');
+      return;
+    }
+
     setLoading(true);
+    const fullAddress = addressData
+      ? `${addressData.street}, ${addressData.number || 's/n'}${addressData.complement ? ` - ${addressData.complement}` : ''}, ${addressData.neighborhood}, ${addressData.city}-${addressData.state}`
+      : String(formData.get('address') || '');
+
     const payload = {
       customerName: String(formData.get('customerName') || ''),
       customerPhone: phone,
       orderType,
       paymentMethod,
-      address: String(formData.get('address') || ''),
+      address: fullAddress,
+      postalCode: addressData?.cep || null,
+      mapsLink: addressData?.mapsLink || null,
+      addressConfirmed: Boolean(addressData?.confirmed),
+      freightCents: orderType === 'delivery' ? freightEstimateCents : 0,
       notes: String(formData.get('notes') || ''),
-      items
+      items: items.map((item) => ({
+        productId: item.productId,
+        name: item.name,
+        priceCents: item.priceCents,
+        quantity: item.quantity,
+        size: item.selectedSize,
+        includedToppings: item.includedToppings,
+        optionalToppings: item.optionalToppings,
+        toppings: item.toppings
+      }))
     };
 
     const response = await fetch('/api/orders', {
@@ -121,7 +232,10 @@ export function CheckoutForm() {
             </div>
           ))}
         </div>
-        <p className="mt-4 text-lg font-bold">Total: {currencyBRL(totalCents)}</p>
+        {orderType === 'delivery' && (
+          <p className="mt-4 text-sm text-slate-700">Frete estimado: {settings?.free_shipping_enabled || !settings?.freight_enabled ? 'Grátis' : currencyBRL(freightEstimateCents)}</p>
+        )}
+        <p className="mt-2 text-lg font-bold">Total: {currencyBRL(totalWithFreight)}</p>
       </section>
 
       <form className="card space-y-3" onSubmit={onSubmit}>
@@ -164,7 +278,26 @@ export function CheckoutForm() {
             ))}
           </div>
         </div>
-        {orderType === 'delivery' && <input name="address" required placeholder="Endereço de entrega" className="w-full rounded-xl border px-3 py-2" />}
+
+        {orderType === 'delivery' ? (
+          <section className="space-y-2 rounded-xl border p-3">
+            <h3 className="font-semibold">Endereço de entrega</h3>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input name="postalCode" placeholder="CEP" className="rounded-xl border px-3 py-2" required />
+              <input name="addressNumber" placeholder="Número" className="rounded-xl border px-3 py-2" required />
+            </div>
+            <input name="addressComplement" placeholder="Complemento (opcional)" className="w-full rounded-xl border px-3 py-2" />
+            <button type="button" className="btn-secondary" onClick={(event) => onLookupCep(event.currentTarget.form!)}>Buscar e validar CEP</button>
+            {addressData && (
+              <div className="rounded-xl bg-slate-50 p-3 text-sm">
+                <p><strong>Endereço encontrado:</strong> {addressData.street}, {addressData.number || 's/n'}{addressData.complement ? ` - ${addressData.complement}` : ''}, {addressData.neighborhood}, {addressData.city}-{addressData.state} | CEP {addressData.cep}</p>
+                <a href={addressData.mapsLink} target="_blank" rel="noreferrer" className="mt-2 inline-block text-acai underline">Clique no link para confirmar seu endereço no mapa</a>
+                <label className="mt-2 flex items-center gap-2"><input type="checkbox" checked={addressData.confirmed} onChange={(event) => setAddressData((prev) => prev ? { ...prev, confirmed: event.target.checked } : prev)} />Confirmo que o endereço está correto no mapa</label>
+              </div>
+            )}
+          </section>
+        ) : null}
+
         <textarea name="notes" placeholder="Observações" className="w-full rounded-xl border px-3 py-2" rows={3} />
 
         <button className="btn-primary w-full" disabled={loading || items.length === 0}>

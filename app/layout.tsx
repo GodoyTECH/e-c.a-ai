@@ -3,10 +3,23 @@ import { CartProvider } from '@/components/cart-context';
 import { InternalNav } from '@/components/internal-nav';
 import { PwaInstallCard } from '@/components/pwa-install-card';
 import { SwRegister } from '@/components/sw-register';
+import { SiteFooter } from '@/components/site-footer';
 
 export const metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://refrescando.netlify.app'),
   title: 'Refrescando',
-  description: 'Cardápio digital com checkout e painel admin'
+  description: 'Cardápio digital com checkout e painel admin',
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+    shortcut: '/logo.png'
+  },
+  openGraph: {
+    title: 'Refrescando',
+    description: 'Cardápio digital com checkout e painel admin',
+    images: ['/logo.png']
+  }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -17,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SwRegister />
           <InternalNav />
           {children}
+          <SiteFooter />
           <PwaInstallCard />
         </CartProvider>
       </body>

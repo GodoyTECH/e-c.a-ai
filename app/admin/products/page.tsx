@@ -6,7 +6,6 @@ import { currencyBRL } from '@/lib/utils';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type ProductSizeInput = { id?: string; label: string; volume_ml: number; priceInput: string; active: boolean; sort_order: number };
-type ToppingInput = { id?: string; name: string; priceInput: string; active: boolean; sort_order: number; archived: boolean };
 
 type Product = {
   id: string;
@@ -44,7 +43,7 @@ const emptySize = (): ProductSizeInput => ({ label: 'Médio', volume_ml: 500, pr
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [catalogToppings, setCatalogToppings] = useState<ToppingInput[]>([]);
+  const [catalogToppings, setCatalogToppings] = useState<{ id: string; name: string; priceInput: string; active: boolean; sort_order: number; archived: boolean }[]>([]);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [priceInput, setPriceInput] = useState('');
@@ -174,14 +173,6 @@ export default function AdminProductsPage() {
         active: row.active,
         sort_order: row.sort_order ?? index
       })),
-      catalog_toppings: catalogToppings.map((item, index) => ({
-        id: item.id,
-        name: item.name,
-        price_cents: parsePriceToCents(item.priceInput) ?? 0,
-        active: item.active,
-        sort_order: item.sort_order ?? index,
-        archived: item.archived
-      })),
       main_image_url: uploadedUrl !== undefined ? uploadedUrl : currentProduct?.main_image_url || null,
       images: uploadedUrl ? [uploadedUrl] : currentProduct?.main_image_url ? [currentProduct.main_image_url] : []
     };
@@ -230,10 +221,10 @@ export default function AdminProductsPage() {
   return (
     <main className="mx-auto grid max-w-7xl gap-4 p-4 md:grid-cols-2 md:p-8">
       <form id="new-product-form" className="card glass-card space-y-4" onSubmit={async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); await saveProduct(); }}>
-        <h1 className="text-xl font-bold">{isEditing ? 'Editar produto completo' : 'Novo produto completo'}</h1>
+        <h1 className="text-xl font-bold">{isEditing ? 'Editar produto' : 'Novo produto'}</h1>
 
         <section className="space-y-2 rounded-xl border p-3">
-          <h2 className="font-semibold">Informações básicas</h2>
+          <h2 className="font-semibold">Dados do produto</h2>
           <input className="w-full rounded-xl border px-3 py-2" required placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} />
           <textarea className="w-full rounded-xl border px-3 py-2" required placeholder="Descrição" value={description} onChange={(e) => setDescription(e.target.value)} />
           <input className="w-full rounded-xl border px-3 py-2" value={priceInput} onChange={(e) => setPriceInput(e.target.value)} placeholder="Preço base (ex: 24,90)" required />
@@ -264,20 +255,7 @@ export default function AdminProductsPage() {
         </section>
 
         <section className="space-y-2 rounded-xl border p-3">
-          <h2 className="font-semibold">Catálogo de acompanhamentos</h2>
-          {catalogToppings.map((topping, index) => (
-            <div key={topping.id || index} className="grid gap-2 rounded-xl border p-2 md:grid-cols-4">
-              <input className="rounded-lg border px-2 py-1" value={topping.name} onChange={(e) => setCatalogToppings((prev) => prev.map((item, idx) => idx === index ? { ...item, name: e.target.value } : item))} />
-              <input className="rounded-lg border px-2 py-1" value={topping.priceInput} onChange={(e) => setCatalogToppings((prev) => prev.map((item, idx) => idx === index ? { ...item, priceInput: e.target.value } : item))} />
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={topping.active} onChange={(e) => setCatalogToppings((prev) => prev.map((item, idx) => idx === index ? { ...item, active: e.target.checked } : item))} />Ativo</label>
-              <button type="button" className="btn-secondary" onClick={() => setCatalogToppings((prev) => prev.map((item, idx) => idx === index ? { ...item, archived: !item.archived } : item))}>{topping.archived ? 'Restaurar' : 'Arquivar'}</button>
-            </div>
-          ))}
-          <button type="button" className="btn-secondary" onClick={() => setCatalogToppings((prev) => [...prev, { name: '', priceInput: '0,00', active: true, sort_order: prev.length + 1, archived: false }])}>Novo acompanhamento</button>
-        </section>
-
-        <section className="space-y-2 rounded-xl border p-3">
-          <h2 className="font-semibold">Inclusos e adicionais do produto</h2>
+          <h2 className="font-semibold">Condimentos globais por produto</h2>
           {catalogToppings.filter((item) => !item.archived).map((topping) => {
             const isOptional = optionalRows.some((row) => row.topping_id === topping.id);
             const optional = optionalRows.find((row) => row.topping_id === topping.id);

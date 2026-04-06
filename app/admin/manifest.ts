@@ -3,8 +3,8 @@ import type { MetadataRoute } from 'next';
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: '/admin?source=pwa-admin',
-    name: 'Refresh Ice Admin',
-    short_name: 'Painel Admin',
+    name: 'Painel Admin Refrescando',
+    short_name: 'Admin Refrescando',
     description: 'Painel administrativo da loja',
     start_url: '/admin?source=pwa-admin',
     scope: '/admin',
@@ -13,14 +13,14 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#6f2dbd',
     icons: [
       {
-        src: '/icons/admin-icon-192.svg',
+        src: '/logo.png',
         sizes: '192x192',
-        type: 'image/svg+xml'
+        type: 'image/png'
       },
       {
-        src: '/icons/admin-icon-512.svg',
+        src: '/logo.png',
         sizes: '512x512',
-        type: 'image/svg+xml'
+        type: 'image/png'
       }
     ]
   };

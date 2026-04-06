@@ -143,7 +143,7 @@ export async function listStoreData() {
        ORDER BY p.featured DESC, p.created_at DESC`
     );
     const settingsRes = await db.query(
-      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url FROM store_settings WHERE id = 1'
+      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, store_latitude, store_longitude FROM store_settings WHERE id = 1'
     );
     const toppingsRes = await db.query(
       'SELECT id, name, price_cents, active, sort_order, archived FROM acai_toppings WHERE archived = false ORDER BY sort_order ASC, name ASC'
@@ -321,7 +321,7 @@ export async function getStoreSettings() {
     await ensureDbSchema();
     const db = getDb();
     const res = await db.query(
-      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url FROM store_settings WHERE id=1'
+      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, store_latitude, store_longitude FROM store_settings WHERE id=1'
     );
     return res.rows[0] as StoreSettings;
   } catch (error) {
@@ -343,9 +343,14 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       allow_pickup,
       default_order_message,
       public_site_url,
+      freight_enabled,
+      free_shipping_enabled,
+      freight_per_km_cents,
+      store_latitude,
+      store_longitude,
       updated_at
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
     ON CONFLICT (id) DO UPDATE SET
       store_name = EXCLUDED.store_name,
       owner_whatsapp_number = EXCLUDED.owner_whatsapp_number,
@@ -353,6 +358,11 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       allow_pickup = EXCLUDED.allow_pickup,
       default_order_message = EXCLUDED.default_order_message,
       public_site_url = EXCLUDED.public_site_url,
+      freight_enabled = EXCLUDED.freight_enabled,
+      free_shipping_enabled = EXCLUDED.free_shipping_enabled,
+      freight_per_km_cents = EXCLUDED.freight_per_km_cents,
+      store_latitude = EXCLUDED.store_latitude,
+      store_longitude = EXCLUDED.store_longitude,
       updated_at = NOW()`,
     [
       1,
@@ -361,7 +371,12 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       input.allow_delivery ?? true,
       input.allow_pickup ?? true,
       input.default_order_message ?? null,
-      (input.public_site_url || DEFAULT_SITE_URL).trim()
+      (input.public_site_url || DEFAULT_SITE_URL).trim(),
+      input.freight_enabled ?? false,
+      input.free_shipping_enabled ?? true,
+      Math.max(0, Number(input.freight_per_km_cents ?? 0)),
+      Number.isFinite(Number(input.store_latitude)) ? Number(input.store_latitude) : null,
+      Number.isFinite(Number(input.store_longitude)) ? Number(input.store_longitude) : null
     ]
   );
 }
@@ -397,4 +412,44 @@ export async function updateToppingStatus(id: string, active: boolean) {
   await ensureDbSchema();
   const db = getDb();
   await db.query('UPDATE acai_toppings SET active = $1 WHERE id = $2', [active, id]);
+}
+
+export async function upsertTopping(input: {
+  id?: string;
+  name: string;
+  price_cents: number;
+  active: boolean;
+  sort_order: number;
+  archived?: boolean;
+}) {
+  await ensureDbSchema();
+  const db = getDb();
+
+  if (input.id) {
+    await db.query(
+      `UPDATE acai_toppings
+       SET name = $1,
+           price_cents = $2,
+           active = $3,
+           sort_order = $4,
+           archived = $5
+       WHERE id = $6`,
+      [input.name.trim(), input.price_cents, input.active, input.sort_order, input.archived ?? false, input.id]
+    );
+    return input.id;
+  }
+
+  const inserted = await db.query(
+    `INSERT INTO acai_toppings (name, price_cents, active, sort_order, archived)
+     VALUES ($1,$2,$3,$4,$5)
+     ON CONFLICT (name) DO UPDATE SET
+       price_cents = EXCLUDED.price_cents,
+       active = EXCLUDED.active,
+       sort_order = EXCLUDED.sort_order,
+       archived = EXCLUDED.archived
+     RETURNING id`,
+    [input.name.trim(), input.price_cents, input.active, input.sort_order, input.archived ?? false]
+  );
+
+  return inserted.rows[0].id as string;
 }

@@ -118,11 +118,14 @@ export function Storefront({
               <Image src="/banner.svg" alt="Banner Refrescando" fill priority className="object-cover" onError={() => setShowBannerFallback(true)} />
             )}
           </div>
-          <div className="relative z-10 grid gap-6 px-6 py-8 text-white md:px-10 md:py-10">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">Açaí premium delivery</p>
-            <h1 className="max-w-2xl text-4xl font-black leading-[1.05] tracking-tight md:text-5xl">Refrescando</h1>
+          <div className="relative z-10 grid gap-4 px-6 py-8 text-white md:px-10 md:py-10">
+            <div className="flex items-center gap-3">
+              <Image src="/logo.png" alt="Logo da loja" width={72} height={72} className="h-14 w-14 rounded-2xl object-cover shadow-lg md:h-16 md:w-16" />
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">Açaí premium delivery</p>
+            </div>
+            <p className="max-w-2xl text-2xl font-black leading-tight tracking-tight md:text-4xl">Monte seu pedido do seu jeito, com entrega rápida e operação profissional.</p>
             <p className="max-w-xl text-sm leading-relaxed text-white/90 md:text-base">
-              Monte seu pedido com tamanhos, inclusos e adicionais de forma clara. Experiência rápida no celular e fechamento direto no WhatsApp.
+              Escolha tamanho em ML, veja os inclusos do produto e finalize pelo WhatsApp com resumo completo do pedido.
             </p>
           </div>
         </div>

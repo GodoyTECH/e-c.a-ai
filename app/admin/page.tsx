@@ -15,7 +15,11 @@ export default function AdminPage() {
         </Link>
         <Link href="/admin/settings" className="card glass-card hover:ring-acai">
           <h2 className="font-semibold">Configurações</h2>
-          <p className="text-sm text-slate-600">WhatsApp, tipo de atendimento e mensagem padrão.</p>
+          <p className="text-sm text-slate-600">WhatsApp, tipo de atendimento, frete e mensagem padrão.</p>
+        </Link>
+        <Link href="/admin/toppings" className="card glass-card hover:ring-acai">
+          <h2 className="font-semibold">Condimentos globais</h2>
+          <p className="text-sm text-slate-600">Catálogo único de acompanhamentos da loja.</p>
         </Link>
       </div>
     </main>
