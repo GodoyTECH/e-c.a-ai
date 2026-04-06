@@ -1,5 +1,4 @@
 import { ensureDbSchema, getDb } from '@/lib/db';
-import { generateOrderCode } from '@/lib/utils';
 import { gerarMensagemPedido } from '@/lib/formatOrderMessage';
 import { gerarLinkWhatsApp } from '@/lib/whatsapp';
 import { CheckoutPayload } from '@/types/order';
@@ -12,7 +11,7 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
   const totalCents = subtotal + freightCents;
 
   if (!process.env.DATABASE_URL) {
-    const code = generateOrderCode();
+    const code = `ACA-${String(Math.floor(Date.now() / 1000) % 1_000_000).padStart(6, '0')}`;
     const siteUrl = DEFAULT_SITE_URL;
     const message = gerarMensagemPedido({
       orderCode: code,
@@ -66,7 +65,13 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
       'SELECT owner_whatsapp_number, default_order_message, public_site_url, allow_delivery, allow_pickup FROM store_settings WHERE id = 1'
     );
 
-    const code = generateOrderCode();
+    const sequence = await client.query(
+      `SELECT COALESCE(MAX(CAST(SUBSTRING(code FROM 5) AS INTEGER)), 0) AS max_seq
+       FROM orders
+       WHERE code ~ '^ACA-[0-9]{6}$'`
+    );
+    const nextCode = Number(sequence.rows[0]?.max_seq || 0) + 1;
+    const code = `ACA-${String(nextCode).padStart(6, '0')}`;
     const settingsRow = settings.rows[0] || {};
     if (payload.orderType === 'delivery' && settingsRow.allow_delivery === false) {
       throw new Error('Entrega está desativada nas configurações.');
@@ -105,8 +110,8 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
 
     const orderRes = await client.query(
       `INSERT INTO orders
-        (code, customer_name, customer_phone, order_type, payment_method, address, delivery_address, postal_code, maps_link, address_confirmed, notes, status, subtotal_cents, freight_cents, total_cents, whatsapp_target_number, whatsapp_message_snapshot, idempotency_key)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending_whatsapp',$12,$13,$14,$15,$16,$17)
+        (code, customer_name, customer_phone, order_type, payment_method, address, delivery_address, postal_code, maps_link, address_confirmed, notes, status, subtotal_cents, freight_cents, total_cents, customer_latitude, customer_longitude, whatsapp_target_number, whatsapp_message_snapshot, idempotency_key)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending_whatsapp',$12,$13,$14,$15,$16,$17,$18,$19)
        RETURNING id, code`,
       [
         code,
@@ -123,6 +128,8 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
         subtotal,
         freightCents,
         totalCents,
+        payload.customerLatitude ?? null,
+        payload.customerLongitude ?? null,
         settingsRow.owner_whatsapp_number || null,
         message,
         idempotencyKey || null
@@ -207,7 +214,7 @@ export async function listOrders() {
     await ensureDbSchema();
     const db = getDb();
     const orders = await db.query(
-      `SELECT id, code, customer_name, customer_phone, order_type, payment_method, status, subtotal_cents, freight_cents, total_cents, notes, delivery_address, postal_code, maps_link, created_at
+      `SELECT id, code, customer_name, customer_phone, order_type, payment_method, status, subtotal_cents, freight_cents, total_cents, notes, delivery_address, postal_code, maps_link, customer_latitude, customer_longitude, created_at
        FROM orders
        ORDER BY created_at DESC`
     );
@@ -244,7 +251,7 @@ export async function listOrders() {
   }
 }
 
-export async function updateOrderStatus(orderId: string, status: 'confirmed' | 'rejected', _reason?: string) {
+export async function updateOrderStatus(orderId: string, status: 'confirmed' | 'rejected' | 'preparing' | 'delivered', _reason?: string) {
   if (!process.env.DATABASE_URL) return;
 
   await ensureDbSchema();

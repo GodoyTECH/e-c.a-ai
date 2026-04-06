@@ -12,6 +12,8 @@ const schema = z.object({
   mapsLink: z.string().url().nullable().optional(),
   addressConfirmed: z.boolean().optional(),
   freightCents: z.number().int().nonnegative().optional(),
+  customerLatitude: z.number().min(-90).max(90).nullable().optional(),
+  customerLongitude: z.number().min(-180).max(180).nullable().optional(),
   notes: z.string().optional(),
   items: z
     .array(

@@ -87,6 +87,12 @@ export const demoSettings: StoreSettings = {
   freight_enabled: false,
   free_shipping_enabled: true,
   freight_per_km_cents: 0,
+  freight_per_km_brl: 0,
   store_latitude: null,
-  store_longitude: null
+  store_longitude: null,
+  store_postal_code: null,
+  delivery_origin_mode: 'store_postal_code',
+  current_origin_latitude: null,
+  current_origin_longitude: null,
+  current_origin_updated_at: null
 };

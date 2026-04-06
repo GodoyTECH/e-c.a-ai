@@ -83,7 +83,12 @@ export type StoreSettings = {
   freight_enabled?: boolean;
   free_shipping_enabled?: boolean;
   freight_per_km_cents?: number;
+  freight_per_km_brl?: number;
   store_latitude?: number | null;
   store_longitude?: number | null;
   store_postal_code?: string | null;
+  delivery_origin_mode?: 'store_postal_code' | 'current_location';
+  current_origin_latitude?: number | null;
+  current_origin_longitude?: number | null;
+  current_origin_updated_at?: string | null;
 };
