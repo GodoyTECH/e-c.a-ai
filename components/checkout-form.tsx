@@ -17,6 +17,12 @@ type AddressLookup = {
   mapsLink: string;
 };
 
+function formatCepValue(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+}
+
 export function CheckoutForm() {
   const { items, totalCents, addItem, removeItem, clear } = useCart();
   const [loading, setLoading] = useState(false);
@@ -48,15 +54,25 @@ export function CheckoutForm() {
       return;
     }
 
-    if (!settings.store_latitude || !settings.store_longitude || !settings.freight_per_km_cents) {
+    if (settings.store_latitude == null || settings.store_longitude == null || !settings.freight_per_km_cents) {
       setFreightEstimateCents(0);
       return;
     }
 
     try {
-      const geocodeRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${fullAddress}, ${postalCode}, Brasil`)}`);
+      const geocodeUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${fullAddress}, ${postalCode}, Brasil`)}`;
+      const geocodeRes = await fetch(geocodeUrl);
       const geocodeData = await geocodeRes.json();
-      const first = geocodeData?.[0];
+      let first = geocodeData?.[0];
+
+      if (!first?.lat || !first?.lon) {
+        const fallbackRes = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${postalCode}, Brasil`)}`
+        );
+        const fallbackData = await fallbackRes.json();
+        first = fallbackData?.[0];
+      }
+
       if (!first?.lat || !first?.lon) {
         setFreightEstimateCents(0);
         return;
@@ -97,7 +113,12 @@ export function CheckoutForm() {
 
     const number = String(formData.get('addressNumber') || '').trim();
     const complement = String(formData.get('addressComplement') || '').trim();
-    const addressText = `${data.logradouro || ''}, ${number || 's/n'}${complement ? ` - ${complement}` : ''}, ${data.bairro || ''}, ${data.localidade || ''}-${data.uf || ''}`;
+    if (!data.logradouro || !data.bairro || !data.localidade || !data.uf) {
+      alert('Não foi possível validar o endereço completo com esse CEP. Confira o CEP e tente novamente.');
+      return;
+    }
+
+    const addressText = `${data.logradouro}, ${number || 's/n'}${complement ? ` - ${complement}` : ''}, ${data.bairro}, ${data.localidade}-${data.uf}`;
     const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText + `, CEP ${cep}`)}`;
 
     setAddressData({
@@ -283,7 +304,18 @@ export function CheckoutForm() {
           <section className="space-y-2 rounded-xl border p-3">
             <h3 className="font-semibold">Endereço de entrega</h3>
             <div className="grid gap-2 sm:grid-cols-2">
-              <input name="postalCode" placeholder="CEP" className="rounded-xl border px-3 py-2" required />
+              <input
+                name="postalCode"
+                placeholder="CEP"
+                className="rounded-xl border px-3 py-2"
+                required
+                maxLength={9}
+                inputMode="numeric"
+                pattern="^\d{5}-?\d{3}$"
+                onChange={(event) => {
+                  event.currentTarget.value = formatCepValue(event.currentTarget.value);
+                }}
+              />
               <input name="addressNumber" placeholder="Número" className="rounded-xl border px-3 py-2" required />
             </div>
             <input name="addressComplement" placeholder="Complemento (opcional)" className="w-full rounded-xl border px-3 py-2" />
