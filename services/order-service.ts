@@ -21,7 +21,14 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
       address: payload.address || null,
       notes: payload.notes || null,
       subtotalCents: subtotal,
-      items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity, toppings: item.toppings })),
+      items: payload.items.map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        size: item.size,
+        includedToppings: item.includedToppings,
+        optionalToppings: item.optionalToppings,
+        lineTotalCents: item.priceCents * item.quantity
+      })),
       defaultMessage: 'Olá! Pedido criado em modo demonstração.',
       siteUrl
     });
@@ -70,7 +77,14 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
       address: payload.address || null,
       notes: payload.notes || null,
       subtotalCents: subtotal,
-      items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity, toppings: item.toppings })),
+      items: payload.items.map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        size: item.size,
+        includedToppings: item.includedToppings,
+        optionalToppings: item.optionalToppings,
+        lineTotalCents: item.priceCents * item.quantity
+      })),
       defaultMessage: settingsRow.default_order_message || null,
       siteUrl: settingsRow.public_site_url || DEFAULT_SITE_URL
     });
@@ -98,9 +112,16 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
     );
 
     for (const item of payload.items) {
+      const detailsSnapshot = {
+        size: item.size,
+        includedToppings: item.includedToppings,
+        optionalToppings: item.optionalToppings,
+        itemSubtotal: item.priceCents * item.quantity
+      };
+
       await client.query(
-        `INSERT INTO order_items (order_id, product_id, name, product_name_snapshot, quantity, unit_price_cents, unit_price_snapshot, line_total, toppings_snapshot)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        `INSERT INTO order_items (order_id, product_id, name, product_name_snapshot, quantity, unit_price_cents, unit_price_snapshot, line_total, toppings_snapshot, details_snapshot)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
         [
           orderRes.rows[0].id,
           item.productId,
@@ -110,7 +131,8 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
           item.priceCents,
           item.priceCents,
           item.priceCents * item.quantity,
-          item.toppings.length ? item.toppings.join(', ') : null
+          item.optionalToppings.length ? item.optionalToppings.map((topping) => topping.name).join(', ') : null,
+          JSON.stringify(detailsSnapshot)
         ]
       );
     }
@@ -130,7 +152,14 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
           address: payload.address || null,
           notes: payload.notes || null,
           subtotalCents: subtotal,
-          items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity, toppings: item.toppings })),
+          items: payload.items.map((item) => ({
+            name: item.name,
+            quantity: item.quantity,
+            size: item.size,
+            includedToppings: item.includedToppings,
+            optionalToppings: item.optionalToppings,
+            lineTotalCents: item.priceCents * item.quantity
+          })),
           defaultMessage: settingsRow.default_order_message || null,
           siteUrl: settingsRow.public_site_url || DEFAULT_SITE_URL
         }
@@ -155,12 +184,33 @@ export async function listOrders() {
     await ensureDbSchema();
     const db = getDb();
     const orders = await db.query(
-      `SELECT id, code, customer_name, customer_phone, order_type, payment_method, status, total_cents, created_at
+      `SELECT id, code, customer_name, customer_phone, order_type, payment_method, status, total_cents, notes, delivery_address, created_at
        FROM orders
        ORDER BY created_at DESC`
     );
 
-    return orders.rows;
+    const items = await db.query(
+      `SELECT order_id, product_name_snapshot, quantity, line_total, details_snapshot
+       FROM order_items
+       ORDER BY id ASC`
+    );
+
+    const groupedItems = new Map<string, any[]>();
+    for (const row of items.rows) {
+      const parsed = row.details_snapshot || {};
+      const list = groupedItems.get(row.order_id) || [];
+      list.push({
+        name: row.product_name_snapshot,
+        quantity: row.quantity,
+        line_total: row.line_total,
+        size: parsed.size || null,
+        includedToppings: parsed.includedToppings || [],
+        optionalToppings: parsed.optionalToppings || []
+      });
+      groupedItems.set(row.order_id, list);
+    }
+
+    return orders.rows.map((order) => ({ ...order, items: groupedItems.get(order.id) || [] }));
   } catch (error) {
     console.warn('Falha ao listar pedidos. Retornando lista vazia.', error);
     return [];

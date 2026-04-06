@@ -14,6 +14,14 @@ export type CheckoutPayload = {
     name: string;
     quantity: number;
     priceCents: number;
+    size: {
+      id: string;
+      label: string;
+      volumeMl: number;
+      priceCents: number;
+    };
+    includedToppings: { toppingId: string; name: string; priceCents: number }[];
+    optionalToppings: { toppingId: string; name: string; priceCents: number }[];
     toppings: string[];
   }[];
 };

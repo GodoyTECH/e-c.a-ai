@@ -29,6 +29,43 @@ CREATE TABLE IF NOT EXISTS product_images (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS product_sizes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  volume_ml INTEGER NOT NULL CHECK (volume_ml > 0),
+  price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order SMALLINT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS acai_toppings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  price_cents INTEGER NOT NULL DEFAULT 0 CHECK (price_cents >= 0),
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order SMALLINT NOT NULL DEFAULT 0,
+  archived BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS product_included_toppings (
+  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  topping_id UUID NOT NULL REFERENCES acai_toppings(id),
+  sort_order SMALLINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (product_id, topping_id)
+);
+
+CREATE TABLE IF NOT EXISTS product_optional_toppings (
+  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  topping_id UUID NOT NULL REFERENCES acai_toppings(id),
+  custom_price_cents INTEGER,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order SMALLINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (product_id, topping_id)
+);
+
 CREATE TABLE IF NOT EXISTS orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   code TEXT NOT NULL UNIQUE,
@@ -59,13 +96,8 @@ CREATE TABLE IF NOT EXISTS order_items (
   unit_price_cents INTEGER NOT NULL CHECK (unit_price_cents >= 0),
   unit_price_snapshot INTEGER,
   line_total INTEGER,
-  toppings_snapshot TEXT
-);
-
-CREATE TABLE IF NOT EXISTS acai_toppings (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL UNIQUE,
-  active BOOLEAN NOT NULL DEFAULT TRUE
+  toppings_snapshot TEXT,
+  details_snapshot JSONB
 );
 
 CREATE TABLE IF NOT EXISTS store_settings (
@@ -88,6 +120,10 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_address TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_cents INTEGER;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS whatsapp_target_number TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS whatsapp_message_snapshot TEXT;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS details_snapshot JSONB;
+ALTER TABLE acai_toppings ADD COLUMN IF NOT EXISTS price_cents INTEGER;
+ALTER TABLE acai_toppings ADD COLUMN IF NOT EXISTS sort_order SMALLINT;
+ALTER TABLE acai_toppings ADD COLUMN IF NOT EXISTS archived BOOLEAN;
 
 UPDATE orders SET payment_method = COALESCE(payment_method, 'pix');
 UPDATE orders SET delivery_address = COALESCE(delivery_address, address);
@@ -120,20 +156,31 @@ ALTER TABLE store_settings ALTER COLUMN public_site_url SET DEFAULT 'https://ref
 ALTER TABLE store_settings ALTER COLUMN public_site_url SET NOT NULL;
 ALTER TABLE store_settings ALTER COLUMN store_name SET DEFAULT 'Refrescando';
 
-INSERT INTO acai_toppings (name, active) VALUES
-  ('Leite condensado', true),
-  ('Leite em pó', true),
-  ('Granola', true),
-  ('Paçoca', true),
-  ('Banana', true),
-  ('Morango', true),
-  ('Nutella', true),
-  ('Mel', true),
-  ('Ovomaltine', true),
-  ('Coco ralado', true)
+UPDATE acai_toppings SET price_cents = COALESCE(price_cents, 0), sort_order = COALESCE(sort_order, 0), archived = COALESCE(archived, false);
+ALTER TABLE acai_toppings ALTER COLUMN price_cents SET DEFAULT 0;
+ALTER TABLE acai_toppings ALTER COLUMN price_cents SET NOT NULL;
+ALTER TABLE acai_toppings ALTER COLUMN sort_order SET DEFAULT 0;
+ALTER TABLE acai_toppings ALTER COLUMN sort_order SET NOT NULL;
+ALTER TABLE acai_toppings ALTER COLUMN archived SET DEFAULT false;
+ALTER TABLE acai_toppings ALTER COLUMN archived SET NOT NULL;
+
+INSERT INTO acai_toppings (name, active, price_cents, sort_order, archived) VALUES
+  ('Leite condensado', true, 250, 1, false),
+  ('Leite em pó', true, 200, 2, false),
+  ('Granola', true, 180, 3, false),
+  ('Paçoca', true, 200, 4, false),
+  ('Banana', true, 220, 5, false),
+  ('Morango', true, 300, 6, false),
+  ('Nutella', true, 400, 7, false),
+  ('Mel', true, 250, 8, false),
+  ('Ovomaltine', true, 300, 9, false),
+  ('Coco ralado', true, 220, 10, false)
 ON CONFLICT (name) DO NOTHING;
 
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_product_sizes_product_id ON product_sizes(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_optional_toppings_product_id ON product_optional_toppings(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_included_toppings_product_id ON product_included_toppings(product_id);
