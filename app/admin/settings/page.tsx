@@ -9,6 +9,9 @@ type SettingsForm = {
   allow_pickup: boolean;
   default_order_message: string;
   public_site_url: string;
+  store_address: string;
+  delivery_fee_per_km: string;
+  delivery_fee_enabled: boolean;
 };
 
 const DEFAULT_PUBLIC_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://refrescando.netlify.app/';
@@ -19,7 +22,10 @@ const defaultForm: SettingsForm = {
   allow_delivery: true,
   allow_pickup: true,
   default_order_message: '',
-  public_site_url: DEFAULT_PUBLIC_SITE_URL
+  public_site_url: DEFAULT_PUBLIC_SITE_URL,
+  store_address: '',
+  delivery_fee_per_km: '0,00',
+  delivery_fee_enabled: false
 };
 
 const MARKETING_MESSAGE_KEY = 'marketing-message-v1';
@@ -52,7 +58,10 @@ export default function AdminSettingsPage() {
       allow_delivery: typeof data.allow_delivery === 'boolean' ? data.allow_delivery : true,
       allow_pickup: typeof data.allow_pickup === 'boolean' ? data.allow_pickup : true,
       default_order_message: data.default_order_message || '',
-      public_site_url: data.public_site_url || DEFAULT_PUBLIC_SITE_URL
+      public_site_url: data.public_site_url || DEFAULT_PUBLIC_SITE_URL,
+      store_address: data.store_address || '',
+      delivery_fee_per_km: ((data.delivery_fee_per_km_cents || 0) / 100).toFixed(2).replace('.', ','),
+      delivery_fee_enabled: Boolean(data.delivery_fee_enabled)
     }));
   }
 
@@ -71,7 +80,10 @@ export default function AdminSettingsPage() {
     const payload = {
       ...form,
       owner_whatsapp_number: form.owner_whatsapp_number.replace(/\D/g, ''),
-      public_site_url: form.public_site_url.trim()
+      public_site_url: form.public_site_url.trim(),
+      store_address: form.store_address.trim(),
+      delivery_fee_per_km_cents: Math.round(Number((form.delivery_fee_per_km || '0').replace(',', '.')) * 100) || 0,
+      delivery_fee_enabled: form.delivery_fee_enabled
     };
 
     const res = await fetch('/api/admin/settings', {
@@ -124,6 +136,12 @@ export default function AdminSettingsPage() {
         <input className="w-full rounded-xl border px-3 py-2" value={form.owner_whatsapp_number} onChange={(e) => setForm({ ...form, owner_whatsapp_number: e.target.value })} placeholder="WhatsApp do dono (somente números)" />
         <textarea className="w-full rounded-xl border px-3 py-2" rows={3} value={form.default_order_message} onChange={(e) => setForm({ ...form, default_order_message: e.target.value })} placeholder="Mensagem padrão opcional" />
         <input className="w-full rounded-xl border px-3 py-2" value={form.public_site_url} onChange={(e) => setForm({ ...form, public_site_url: e.target.value })} placeholder="URL pública do site" />
+
+        <input className="w-full rounded-xl border px-3 py-2" value={form.store_address} onChange={(e) => setForm({ ...form, store_address: e.target.value })} placeholder="Endereço da loja (origem das entregas)" />
+        <div className="grid gap-2 md:grid-cols-2">
+          <input className="w-full rounded-xl border px-3 py-2" value={form.delivery_fee_per_km} onChange={(e) => setForm({ ...form, delivery_fee_per_km: e.target.value })} placeholder="Frete por km (ex: 2,50)" />
+          <label className="flex items-center gap-2 rounded-xl border px-3 py-2"><input type="checkbox" checked={form.delivery_fee_enabled} onChange={(e) => setForm({ ...form, delivery_fee_enabled: e.target.checked })} /> Ativar cálculo de frete por km</label>
+        </div>
 
         <label className="flex items-center gap-2"><input type="checkbox" checked={form.allow_delivery} onChange={(e) => setForm({ ...form, allow_delivery: e.target.checked })} /> Entrega</label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={form.allow_pickup} onChange={(e) => setForm({ ...form, allow_pickup: e.target.checked })} /> Retirada</label>

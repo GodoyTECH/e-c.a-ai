@@ -3,6 +3,7 @@ import { CartProvider } from '@/components/cart-context';
 import { InternalNav } from '@/components/internal-nav';
 import { PwaInstallCard } from '@/components/pwa-install-card';
 import { SwRegister } from '@/components/sw-register';
+import { SiteFooter } from '@/components/site-footer';
 
 export const metadata = {
   title: 'Refrescando',
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <InternalNav />
           {children}
           <PwaInstallCard />
+          <SiteFooter />
         </CartProvider>
       </body>
     </html>

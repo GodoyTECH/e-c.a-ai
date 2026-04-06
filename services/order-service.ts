@@ -8,6 +8,8 @@ const DEFAULT_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://refrescand
 
 export async function createOrder(payload: CheckoutPayload, idempotencyKey?: string) {
   const subtotal = payload.items.reduce((acc, item) => acc + item.priceCents * item.quantity, 0);
+  const deliveryFee = payload.orderType === "delivery" ? Math.max(0, payload.deliveryFeeCents || 0) : 0;
+  const total = subtotal + deliveryFee;
 
   if (!process.env.DATABASE_URL) {
     const code = generateOrderCode();
@@ -20,8 +22,18 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
       paymentMethod: payload.paymentMethod,
       address: payload.address || null,
       notes: payload.notes || null,
-      subtotalCents: subtotal,
-      items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity, toppings: item.toppings })),
+      cep: payload.cep || null,
+      mapsLink: payload.addressMapLink || null,
+      deliveryFeeCents: deliveryFee,
+      subtotalCents: total,
+      items: payload.items.map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        size: item.size,
+        includedToppings: item.includedToppings,
+        optionalToppings: item.optionalToppings,
+        lineTotalCents: item.priceCents * item.quantity
+      })),
       defaultMessage: 'Olá! Pedido criado em modo demonstração.',
       siteUrl
     });
@@ -69,16 +81,26 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
       paymentMethod: payload.paymentMethod,
       address: payload.address || null,
       notes: payload.notes || null,
-      subtotalCents: subtotal,
-      items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity, toppings: item.toppings })),
+      cep: payload.cep || null,
+      mapsLink: payload.addressMapLink || null,
+      deliveryFeeCents: deliveryFee,
+      subtotalCents: total,
+      items: payload.items.map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        size: item.size,
+        includedToppings: item.includedToppings,
+        optionalToppings: item.optionalToppings,
+        lineTotalCents: item.priceCents * item.quantity
+      })),
       defaultMessage: settingsRow.default_order_message || null,
       siteUrl: settingsRow.public_site_url || DEFAULT_SITE_URL
     });
 
     const orderRes = await client.query(
       `INSERT INTO orders
-        (code, customer_name, customer_phone, order_type, payment_method, address, delivery_address, notes, status, subtotal_cents, total_cents, whatsapp_target_number, whatsapp_message_snapshot, idempotency_key)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending_whatsapp',$9,$10,$11,$12,$13)
+        (code, customer_name, customer_phone, order_type, payment_method, address, delivery_address, notes, status, subtotal_cents, total_cents, whatsapp_target_number, whatsapp_message_snapshot, idempotency_key, delivery_cep, delivery_maps_url, delivery_lat, delivery_lng, delivery_fee_cents)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending_whatsapp',$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        RETURNING id, code`,
       [
         code,
@@ -90,17 +112,29 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
         payload.address || null,
         payload.notes || null,
         subtotal,
-        subtotal,
+        total,
         settingsRow.owner_whatsapp_number || null,
         message,
-        idempotencyKey || null
+        idempotencyKey || null,
+        payload.cep || null,
+        payload.addressMapLink || null,
+        payload.addressLat || null,
+        payload.addressLng || null,
+        deliveryFee
       ]
     );
 
     for (const item of payload.items) {
+      const detailsSnapshot = {
+        size: item.size,
+        includedToppings: item.includedToppings,
+        optionalToppings: item.optionalToppings,
+        itemSubtotal: item.priceCents * item.quantity
+      };
+
       await client.query(
-        `INSERT INTO order_items (order_id, product_id, name, product_name_snapshot, quantity, unit_price_cents, unit_price_snapshot, line_total, toppings_snapshot)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        `INSERT INTO order_items (order_id, product_id, name, product_name_snapshot, quantity, unit_price_cents, unit_price_snapshot, line_total, toppings_snapshot, details_snapshot)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
         [
           orderRes.rows[0].id,
           item.productId,
@@ -110,7 +144,8 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
           item.priceCents,
           item.priceCents,
           item.priceCents * item.quantity,
-          item.toppings.length ? item.toppings.join(', ') : null
+          item.optionalToppings.length ? item.optionalToppings.map((topping) => topping.name).join(', ') : null,
+          JSON.stringify(detailsSnapshot)
         ]
       );
     }
@@ -129,8 +164,18 @@ export async function createOrder(payload: CheckoutPayload, idempotencyKey?: str
           paymentMethod: payload.paymentMethod,
           address: payload.address || null,
           notes: payload.notes || null,
-          subtotalCents: subtotal,
-          items: payload.items.map((item) => ({ name: item.name, quantity: item.quantity, toppings: item.toppings })),
+          cep: payload.cep || null,
+          mapsLink: payload.addressMapLink || null,
+          deliveryFeeCents: deliveryFee,
+          subtotalCents: total,
+          items: payload.items.map((item) => ({
+            name: item.name,
+            quantity: item.quantity,
+            size: item.size,
+            includedToppings: item.includedToppings,
+            optionalToppings: item.optionalToppings,
+            lineTotalCents: item.priceCents * item.quantity
+          })),
           defaultMessage: settingsRow.default_order_message || null,
           siteUrl: settingsRow.public_site_url || DEFAULT_SITE_URL
         }
@@ -155,12 +200,33 @@ export async function listOrders() {
     await ensureDbSchema();
     const db = getDb();
     const orders = await db.query(
-      `SELECT id, code, customer_name, customer_phone, order_type, payment_method, status, total_cents, created_at
+      `SELECT id, code, customer_name, customer_phone, order_type, payment_method, status, total_cents, notes, delivery_address, created_at, delivery_maps_url, delivery_cep, delivery_fee_cents, delivery_lat, delivery_lng
        FROM orders
        ORDER BY created_at DESC`
     );
 
-    return orders.rows;
+    const items = await db.query(
+      `SELECT order_id, product_name_snapshot, quantity, line_total, details_snapshot
+       FROM order_items
+       ORDER BY id ASC`
+    );
+
+    const groupedItems = new Map<string, any[]>();
+    for (const row of items.rows) {
+      const parsed = row.details_snapshot || {};
+      const list = groupedItems.get(row.order_id) || [];
+      list.push({
+        name: row.product_name_snapshot,
+        quantity: row.quantity,
+        line_total: row.line_total,
+        size: parsed.size || null,
+        includedToppings: parsed.includedToppings || [],
+        optionalToppings: parsed.optionalToppings || []
+      });
+      groupedItems.set(row.order_id, list);
+    }
+
+    return orders.rows.map((order) => ({ ...order, items: groupedItems.get(order.id) || [] }));
   } catch (error) {
     console.warn('Falha ao listar pedidos. Retornando lista vazia.', error);
     return [];

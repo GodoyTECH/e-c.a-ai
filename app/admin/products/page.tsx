@@ -5,6 +5,9 @@ import { demoCategories } from '@/lib/demo-data';
 import { currencyBRL } from '@/lib/utils';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
+type ProductSizeInput = { id?: string; label: string; volume_ml: number; priceInput: string; active: boolean; sort_order: number };
+type ToppingInput = { id?: string; name: string; priceInput: string; active: boolean; sort_order: number; archived: boolean };
+
 type Product = {
   id: string;
   name: string;
@@ -14,27 +17,12 @@ type Product = {
   active: boolean;
   featured: boolean;
   main_image_url: string | null;
+  sizes?: { id: string; label: string; volume_ml: number; price_cents: number; active: boolean; sort_order: number }[];
+  included_toppings?: { topping_id: string; name: string }[];
+  optional_toppings?: { topping_id: string; name: string; price_cents: number; active: boolean; sort_order: number }[];
 };
 
 type Category = { id: string; name: string };
-
-type FormState = {
-  name: string;
-  description: string;
-  priceInput: string;
-  category_id: string;
-  active: boolean;
-  featured: boolean;
-};
-
-const emptyForm: FormState = {
-  name: '',
-  description: '',
-  priceInput: '',
-  category_id: '',
-  active: true,
-  featured: false
-};
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
@@ -51,10 +39,20 @@ function centsToPriceInput(cents: number) {
   return (cents / 100).toFixed(2).replace('.', ',');
 }
 
+const emptySize = (): ProductSizeInput => ({ label: 'Médio', volume_ml: 500, priceInput: '', active: true, sort_order: 0 });
+
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [form, setForm] = useState<FormState>(emptyForm);
+  const [catalogToppings, setCatalogToppings] = useState<ToppingInput[]>([]);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [priceInput, setPriceInput] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [active, setActive] = useState(true);
+  const [featured, setFeatured] = useState(false);
+  const [sizes, setSizes] = useState<ProductSizeInput[]>([emptySize()]);
+  const [includedIds, setIncludedIds] = useState<string[]>([]);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -71,24 +69,36 @@ export default function AdminProductsPage() {
     setError('');
     const [productsRes, storeRes] = await Promise.all([fetch('/api/admin/products'), fetch('/api/products')]);
 
-    if (productsRes.ok) {
-      setProducts(await productsRes.json());
-    }
-
+    if (productsRes.ok) setProducts(await productsRes.json());
     if (storeRes.ok) {
       const data = await storeRes.json();
-      if (Array.isArray(data.categories)) {
-        setCategories(data.categories);
+      if (Array.isArray(data.categories)) setCategories(data.categories);
+      if (Array.isArray(data.toppings)) {
+        setCatalogToppings(
+          data.toppings.map((item: any, index: number) => ({
+            id: item.id,
+            name: item.name,
+            priceInput: centsToPriceInput(item.price_cents || 0),
+            active: item.active,
+            sort_order: item.sort_order ?? index,
+            archived: item.archived ?? false
+          }))
+        );
       }
     }
   };
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   function resetForm() {
-    setForm(emptyForm);
+    setName('');
+    setDescription('');
+    setPriceInput('');
+    setCategoryId('');
+    setActive(true);
+    setFeatured(false);
+    setSizes([emptySize()]);
+    setIncludedIds([]);
     setEditingProductId(null);
     setSelectedImageFile(null);
     setPreview(null);
@@ -96,298 +106,184 @@ export default function AdminProductsPage() {
 
   async function onSelectImage(file: File | null) {
     if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      setError('Arquivo inválido. Selecione uma imagem.');
-      return;
-    }
-
-    if (file.size > MAX_IMAGE_BYTES) {
-      setError('A imagem deve ter no máximo 8MB.');
-      return;
-    }
-
+    if (!file.type.startsWith('image/')) return setError('Arquivo inválido. Selecione uma imagem.');
+    if (file.size > MAX_IMAGE_BYTES) return setError('A imagem deve ter no máximo 8MB.');
     setError('');
     setSelectedImageFile(file);
     setPreview(URL.createObjectURL(file));
   }
 
+  function toggleIncluded(toppingId: string) {
+    setIncludedIds((prev) => (prev.includes(toppingId) ? prev.filter((id) => id !== toppingId) : [...prev, toppingId]));
+  }
+
   async function saveProduct() {
     setError('');
-    const cents = parsePriceToCents(form.priceInput);
-    if (cents === null) {
-      setError('Preço inválido. Exemplo: 49,90');
-      return;
+    const cents = parsePriceToCents(priceInput);
+    if (cents === null) return setError('Preço base inválido. Exemplo: 24,90');
+
+    const parsedSizes = sizes.map((size, index) => ({
+      id: size.id,
+      label: size.label,
+      volume_ml: size.volume_ml,
+      price_cents: parsePriceToCents(size.priceInput) ?? 0,
+      active: size.active,
+      sort_order: size.sort_order ?? index
+    }));
+
+    if (parsedSizes.some((size) => !size.label.trim() || size.volume_ml <= 0 || size.price_cents < 0)) {
+      return setError('Confira os tamanhos: nome, ML e preço são obrigatórios.');
     }
 
     let uploadedUrl: string | null | undefined = undefined;
     if (selectedImageFile) {
       const formData = new FormData();
       formData.append('file', selectedImageFile);
-      const uploadRes = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!uploadRes.ok) {
-        const uploadErr = await uploadRes.json().catch(() => ({}));
-        setError(uploadErr?.details || uploadErr?.error || 'Falha no upload da imagem. Verifique Cloudinary.');
-        return;
-      }
-
-      const uploadData = await uploadRes.json();
-      uploadedUrl = uploadData.url || null;
+      const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+      if (!uploadRes.ok) return setError('Falha no upload da imagem. Verifique Cloudinary.');
+      uploadedUrl = (await uploadRes.json()).url || null;
     }
 
     const currentProduct = products.find((item) => item.id === editingProductId);
-
     const payload = {
       id: editingProductId || undefined,
-      name: form.name,
-      description: form.description,
+      name,
+      description,
       price_cents: cents,
-      category_id: form.category_id,
-      active: form.active,
-      featured: form.featured,
+      category_id: categoryId,
+      active,
+      featured,
+      sizes: parsedSizes,
+      included_topping_ids: includedIds,
+      catalog_toppings: catalogToppings.map((item, index) => ({
+        id: item.id,
+        name: item.name,
+        price_cents: parsePriceToCents(item.priceInput) ?? 0,
+        active: item.active,
+        sort_order: item.sort_order ?? index,
+        archived: item.archived
+      })),
       main_image_url: uploadedUrl !== undefined ? uploadedUrl : currentProduct?.main_image_url || null,
-      images:
-        uploadedUrl !== undefined
-          ? uploadedUrl
-            ? [uploadedUrl]
-            : []
-          : currentProduct?.main_image_url
-            ? [currentProduct.main_image_url]
-            : []
+      images: uploadedUrl ? [uploadedUrl] : currentProduct?.main_image_url ? [currentProduct.main_image_url] : []
     };
 
     const response = await fetch('/api/admin/products', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
     });
 
-    if (!response.ok) {
-      setError(isEditing ? 'Não foi possível atualizar o produto.' : 'Não foi possível salvar o produto.');
-      return;
-    }
-
+    if (!response.ok) return setError('Não foi possível salvar o produto.');
     resetForm();
     await load();
   }
 
   function startEditProduct(product: Product) {
     setEditingProductId(product.id);
-    setForm({
-      name: product.name,
-      description: product.description,
-      priceInput: centsToPriceInput(product.price_cents),
-      category_id: product.category_id,
-      active: product.active,
-      featured: product.featured
-    });
+    setName(product.name);
+    setDescription(product.description);
+    setPriceInput(centsToPriceInput(product.price_cents));
+    setCategoryId(product.category_id);
+    setActive(product.active);
+    setFeatured(product.featured);
+    setSizes(
+      (product.sizes || []).map((size) => ({
+        id: size.id,
+        label: size.label,
+        volume_ml: size.volume_ml,
+        priceInput: centsToPriceInput(size.price_cents),
+        active: size.active,
+        sort_order: size.sort_order
+      }))
+    );
+    setIncludedIds((product.included_toppings || []).map((item) => item.topping_id));
     setSelectedImageFile(null);
     setPreview(product.main_image_url);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  async function insertSampleProducts() {
-    if (!resolvedCategories.length) {
-      setError('Cadastre ou carregue categorias antes de inserir produtos de exemplo.');
-      return;
-    }
-
-    const fallbackCategory = resolvedCategories[0].id;
-    const samples = [
-      {
-        name: 'Açaí Copo 300ml',
-        description: 'Açaí tradicional com granola e banana.',
-        price_cents: 1990,
-        category_id: fallbackCategory,
-        active: true,
-        featured: true,
-        main_image_url: 'https://images.unsplash.com/photo-1590086782792-42dd2350140d?auto=format&fit=crop&w=1200&q=80',
-        images: []
-      },
-      {
-        name: 'Açaí Especial 500ml',
-        description: 'Açaí com leite em pó, morango e paçoca.',
-        price_cents: 3290,
-        category_id: fallbackCategory,
-        active: true,
-        featured: true,
-        main_image_url: 'https://images.unsplash.com/photo-1542444592-0d6685ce4fd4?auto=format&fit=crop&w=1200&q=80',
-        images: []
-      },
-      {
-        name: 'Combo Duplo 2x400ml',
-        description: 'Combo promocional com dois copos de 400ml.',
-        price_cents: 5490,
-        category_id: fallbackCategory,
-        active: true,
-        featured: false,
-        main_image_url: 'https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?auto=format&fit=crop&w=1200&q=80',
-        images: []
-      }
-    ];
-
-    setError('');
-    for (const sample of samples) {
-      const response = await fetch('/api/admin/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sample)
-      });
-
-      if (!response.ok) {
-        setError('Falha ao inserir produtos ilustrativos.');
-        return;
-      }
-    }
-
-    await load();
-  }
-
   return (
-    <main className="mx-auto grid max-w-6xl gap-4 p-4 md:grid-cols-2 md:p-8">
-      <form
-        id="new-product-form"
-        className="card glass-card space-y-2"
-        onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-          event.preventDefault();
-          await saveProduct();
-        }}
-      >
-        <h1 className="text-xl font-bold">{isEditing ? 'Editar produto' : 'Novo produto'}</h1>
-        <input
-          className="w-full rounded-xl border px-3 py-2"
-          name="name"
-          placeholder="Nome"
-          required
-          value={form.name}
-          onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-        />
-        <textarea
-          className="w-full rounded-xl border px-3 py-2"
-          name="description"
-          placeholder="Descrição"
-          required
-          value={form.description}
-          onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
-        />
-        <input
-          className="w-full rounded-xl border px-3 py-2"
-          value={form.priceInput}
-          onChange={(event) => setForm((prev) => ({ ...prev, priceInput: event.target.value }))}
-          inputMode="decimal"
-          placeholder="Preço em reais (ex: 49,90)"
-          required
-        />
-        <select
-          className="w-full rounded-xl border px-3 py-2"
-          name="category_id"
-          required
-          value={form.category_id}
-          onChange={(event) => setForm((prev) => ({ ...prev, category_id: event.target.value }))}
-        >
-          <option value="">Selecione categoria</option>
-          {resolvedCategories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </select>
+    <main className="mx-auto grid max-w-7xl gap-4 p-4 md:grid-cols-2 md:p-8">
+      <form id="new-product-form" className="card glass-card space-y-4" onSubmit={async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); await saveProduct(); }}>
+        <h1 className="text-xl font-bold">{isEditing ? 'Editar produto completo' : 'Novo produto completo'}</h1>
 
-        <div className="space-y-2 rounded-xl border border-dashed p-3">
-          <p className="text-sm font-medium">Imagem do produto</p>
-          <label className="btn-secondary inline-flex cursor-pointer items-center">
-            Anexar imagem
-            <input
-              className="hidden"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(event) => {
-                onSelectImage(event.target.files?.[0] || null);
-                event.currentTarget.value = '';
-              }}
-            />
+        <section className="space-y-2 rounded-xl border p-3">
+          <h2 className="font-semibold">Informações básicas</h2>
+          <input className="w-full rounded-xl border px-3 py-2" required placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} />
+          <textarea className="w-full rounded-xl border px-3 py-2" required placeholder="Descrição" value={description} onChange={(e) => setDescription(e.target.value)} />
+          <input className="w-full rounded-xl border px-3 py-2" value={priceInput} onChange={(e) => setPriceInput(e.target.value)} placeholder="Preço base (ex: 24,90)" required />
+          <select className="w-full rounded-xl border px-3 py-2" required value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <option value="">Selecione categoria</option>
+            {resolvedCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+          </select>
+        </section>
+
+        <section className="space-y-2 rounded-xl border p-3">
+          <h2 className="font-semibold">Imagem</h2>
+          <label className="btn-secondary inline-flex cursor-pointer items-center">Anexar imagem
+            <input className="hidden" type="file" accept="image/*" capture="environment" onChange={(event) => { onSelectImage(event.target.files?.[0] || null); event.currentTarget.value = ''; }} />
           </label>
+          {preview && <Image src={preview} alt="Preview" width={640} height={240} unoptimized className="h-36 w-full rounded-xl object-cover" />}
+        </section>
 
-          {preview && (
-            <div className="space-y-2">
-              <Image src={preview} alt="Preview" width={640} height={240} unoptimized className="h-36 w-full rounded-xl object-cover" />
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => {
-                  setPreview(null);
-                  setSelectedImageFile(null);
-                }}
-              >
-                Remover imagem
-              </button>
+        <section className="space-y-2 rounded-xl border p-3">
+          <div className="flex items-center justify-between"><h2 className="font-semibold">Tamanhos / MLs</h2><button type="button" className="btn-secondary" onClick={() => setSizes((prev) => [...prev, emptySize()])}>Adicionar tamanho</button></div>
+          {sizes.map((size, index) => (
+            <div key={`${size.id || 'new'}-${index}`} className="grid gap-2 rounded-xl border p-2 md:grid-cols-4">
+              <input className="rounded-lg border px-2 py-1" placeholder="Nome" value={size.label} onChange={(e) => setSizes((prev) => prev.map((item, idx) => idx === index ? { ...item, label: e.target.value } : item))} />
+              <input className="rounded-lg border px-2 py-1" placeholder="ML" type="number" value={size.volume_ml} onChange={(e) => setSizes((prev) => prev.map((item, idx) => idx === index ? { ...item, volume_ml: Number(e.target.value) } : item))} />
+              <input className="rounded-lg border px-2 py-1" placeholder="Preço" value={size.priceInput} onChange={(e) => setSizes((prev) => prev.map((item, idx) => idx === index ? { ...item, priceInput: e.target.value } : item))} />
+              <button type="button" className="btn-secondary" onClick={() => setSizes((prev) => prev.filter((_, idx) => idx !== index))}>Remover</button>
             </div>
-          )}
-        </div>
+          ))}
+        </section>
 
-        <label className="flex gap-2">
-          <input
-            type="checkbox"
-            name="active"
-            checked={form.active}
-            onChange={(event) => setForm((prev) => ({ ...prev, active: event.target.checked }))}
-          />{' '}
-          Ativo
-        </label>
-        <label className="flex gap-2">
-          <input
-            type="checkbox"
-            name="featured"
-            checked={form.featured}
-            onChange={(event) => setForm((prev) => ({ ...prev, featured: event.target.checked }))}
-          />{' '}
-          Destaque
-        </label>
+        <section className="space-y-2 rounded-xl border p-3">
+          <h2 className="font-semibold">Catálogo de acompanhamentos</h2>
+          {catalogToppings.map((topping, index) => (
+            <div key={topping.id || index} className="grid gap-2 rounded-xl border p-2 md:grid-cols-4">
+              <input className="rounded-lg border px-2 py-1" value={topping.name} onChange={(e) => setCatalogToppings((prev) => prev.map((item, idx) => idx === index ? { ...item, name: e.target.value } : item))} />
+              <input className="rounded-lg border px-2 py-1" value={topping.priceInput} onChange={(e) => setCatalogToppings((prev) => prev.map((item, idx) => idx === index ? { ...item, priceInput: e.target.value } : item))} />
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={topping.active} onChange={(e) => setCatalogToppings((prev) => prev.map((item, idx) => idx === index ? { ...item, active: e.target.checked } : item))} />Ativo</label>
+              <button type="button" className="btn-secondary" onClick={() => setCatalogToppings((prev) => prev.map((item, idx) => idx === index ? { ...item, archived: !item.archived } : item))}>{topping.archived ? 'Restaurar' : 'Arquivar'}</button>
+            </div>
+          ))}
+          <button type="button" className="btn-secondary" onClick={() => setCatalogToppings((prev) => [...prev, { name: '', priceInput: '0,00', active: true, sort_order: prev.length + 1, archived: false }])}>Novo acompanhamento</button>
+        </section>
+
+        <section className="space-y-2 rounded-xl border p-3">
+          <h2 className="font-semibold">Inclusos por produto</h2>
+          <p className="text-xs text-slate-500">Os condimentos disponíveis e preços são globais da loja. Aqui você define apenas o que já vem incluso neste produto.</p>
+          {catalogToppings.filter((item) => !item.archived && item.active).map((topping) => (
+            <label key={topping.id} className="flex items-center justify-between rounded-xl border p-2 text-sm">
+              <span>{topping.name} <span className="text-xs text-slate-500">({currencyBRL(parsePriceToCents(topping.priceInput) || 0)})</span></span>
+              <input type="checkbox" checked={includedIds.includes(String(topping.id))} onChange={() => toggleIncluded(String(topping.id))} />
+            </label>
+          ))}
+        </section>
+
+        <section className="space-y-2 rounded-xl border p-3">
+          <h2 className="font-semibold">Status</h2>
+          <label className="flex gap-2"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />Ativo</label>
+          <label className="flex gap-2"><input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} />Destaque</label>
+        </section>
+
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex flex-wrap gap-2">
-          <button className="btn-primary" type="submit">
-            {isEditing ? 'Salvar alterações' : 'Salvar'}
-          </button>
-          {isEditing && (
-            <button className="btn-secondary" type="button" onClick={resetForm}>
-              Cancelar edição
-            </button>
-          )}
-          <button className="btn-secondary" type="button" onClick={insertSampleProducts}>
-            Inserir produtos ilustrativos
-          </button>
+          <button className="btn-primary" type="submit">{isEditing ? 'Salvar alterações' : 'Salvar produto'}</button>
+          {isEditing && <button className="btn-secondary" type="button" onClick={resetForm}>Cancelar edição</button>}
         </div>
       </form>
 
-      <section className="space-y-2">
-        <h2 className="text-xl font-bold">Produtos cadastrados</h2>
+      <section className="space-y-3">
         {products.map((product) => (
-          <article key={product.id} className="card glass-card flex items-center justify-between gap-3">
-            <div>
-              <p className="font-semibold">{product.name}</p>
-              <p className="text-sm text-slate-600">{currencyBRL(product.price_cents)}</p>
-            </div>
-            <div className="flex gap-2">
-              <button className="btn-secondary" onClick={() => startEditProduct(product)}>
-                Editar
-              </button>
-              <button
-                className="btn-secondary"
-                onClick={async () => {
-                  await fetch(`/api/admin/products?id=${product.id}`, { method: 'DELETE' });
-                  if (editingProductId === product.id) {
-                    resetForm();
-                  }
-                  await load();
-                }}
-              >
-                Excluir
-              </button>
+          <article key={product.id} className="card glass-card border border-white/40">
+            <div className="mb-3 h-40 rounded-xl bg-slate-100 bg-cover bg-center" style={{ backgroundImage: `url(${product.main_image_url})` }} />
+            <h3 className="font-semibold">{product.name}</h3>
+            <p className="text-sm text-slate-600">{product.description}</p>
+            <p className="mt-2 text-sm">Tamanhos: {(product.sizes || []).map((size) => `${size.label} ${size.volume_ml}ml (${currencyBRL(size.price_cents)})`).join(' • ')}</p>
+            <p className="mt-1 text-sm">Inclusos: {(product.included_toppings || []).map((item) => item.name).join(', ') || 'Nenhum'}</p>
+            <p className="mt-1 text-sm">Adicionais pagos: todos os condimentos ativos da loja (exceto os inclusos).</p>
+            <div className="mt-3 flex gap-2">
+              <button className="btn-secondary" onClick={() => startEditProduct(product)}>Editar</button>
             </div>
           </article>
         ))}
