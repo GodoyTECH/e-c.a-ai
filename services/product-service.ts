@@ -1,6 +1,6 @@
 import { ensureDbSchema, getDb } from '@/lib/db';
-import { Product, StoreSettings } from '@/lib/types';
-import { demoCategories, demoProducts, demoSettings } from '@/lib/demo-data';
+import { Product, StoreSettings, Topping } from '@/lib/types';
+import { demoCategories, demoProducts, demoSettings, demoToppings } from '@/lib/demo-data';
 
 const DEFAULT_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://refrescando.netlify.app/';
 
@@ -29,7 +29,7 @@ async function ensureDefaultCategories() {
 
 export async function listStoreData() {
   if (!process.env.DATABASE_URL) {
-    return { categories: demoCategories, products: demoProducts, settings: demoSettings };
+    return { categories: demoCategories, products: demoProducts, settings: demoSettings, toppings: demoToppings };
   }
 
   try {
@@ -46,17 +46,19 @@ export async function listStoreData() {
     const settingsRes = await db.query(
       'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url FROM store_settings WHERE id = 1'
     );
+    const toppingsRes = await db.query('SELECT id, name, active FROM acai_toppings ORDER BY name ASC');
 
     const products = productsRes.rows as Product[];
 
     return {
       categories: categoriesRows,
       products: products.length ? products : demoProducts,
-      settings: settingsRes.rows[0] as StoreSettings
+      settings: settingsRes.rows[0] as StoreSettings,
+      toppings: (toppingsRes.rows as Topping[]).length ? (toppingsRes.rows as Topping[]) : demoToppings
     };
   } catch (error) {
     console.warn('Falha ao consultar banco de dados. Entrando em modo demonstração.', error);
-    return { categories: demoCategories, products: demoProducts, settings: demoSettings };
+    return { categories: demoCategories, products: demoProducts, settings: demoSettings, toppings: demoToppings };
   }
 }
 
@@ -208,7 +210,7 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       updated_at = NOW()`,
     [
       1,
-      (input.store_name || 'Açaí da Casa').trim(),
+      (input.store_name || 'Refrescando').trim(),
       (input.owner_whatsapp_number || '').replace(/\D/g, ''),
       input.allow_delivery ?? true,
       input.allow_pickup ?? true,
@@ -216,4 +218,34 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
 (input.public_site_url || DEFAULT_SITE_URL).trim()
     ]
   );
+}
+
+export async function listToppings(includeInactive = false) {
+  if (!process.env.DATABASE_URL) {
+    return includeInactive ? demoToppings : demoToppings.filter((item) => item.active);
+  }
+
+  await ensureDbSchema();
+  const db = getDb();
+  const query = includeInactive
+    ? 'SELECT id, name, active FROM acai_toppings ORDER BY name ASC'
+    : 'SELECT id, name, active FROM acai_toppings WHERE active = true ORDER BY name ASC';
+  const res = await db.query(query);
+  return res.rows as Topping[];
+}
+
+export async function seedDefaultToppings() {
+  if (!process.env.DATABASE_URL) return;
+
+  await ensureDbSchema();
+  const db = getDb();
+  for (const topping of demoToppings) {
+    await db.query('INSERT INTO acai_toppings (name, active) VALUES ($1, true) ON CONFLICT (name) DO NOTHING', [topping.name]);
+  }
+}
+
+export async function updateToppingStatus(id: string, active: boolean) {
+  await ensureDbSchema();
+  const db = getDb();
+  await db.query('UPDATE acai_toppings SET active = $1 WHERE id = $2', [active, id]);
 }

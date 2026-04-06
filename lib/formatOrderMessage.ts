@@ -10,7 +10,7 @@ type MessageOrder = {
   address?: string | null;
   notes?: string | null;
   subtotalCents: number;
-  items: { name: string; quantity: number }[];
+  items: { name: string; quantity: number; toppings?: string[] }[];
   defaultMessage?: string | null;
   siteUrl?: string | null;
 };
@@ -32,7 +32,12 @@ export function gerarMensagemPedido(order: MessageOrder) {
     'Itens:'
   ].filter(Boolean) as string[];
 
-  order.items.forEach((item) => lines.push(`- ${item.name} x${item.quantity}`));
+  order.items.forEach((item) => {
+    lines.push(`- ${item.name} x${item.quantity}`);
+    if (item.toppings?.length) {
+      lines.push(`  Acompanhamentos: ${item.toppings.join(', ')}`);
+    }
+  });
 
   lines.push(
     '',

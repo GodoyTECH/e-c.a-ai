@@ -56,8 +56,7 @@ export default function AdminProductsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
-  const [imageFileName, setImageFileName] = useState<string | null>(null);
-  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState('');
 
@@ -91,8 +90,7 @@ export default function AdminProductsPage() {
   function resetForm() {
     setForm(emptyForm);
     setEditingProductId(null);
-    setImageFileName(null);
-    setImageBase64(null);
+    setSelectedImageFile(null);
     setPreview(null);
   }
 
@@ -110,14 +108,8 @@ export default function AdminProductsPage() {
     }
 
     setError('');
-    setImageFileName(file.name || null);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result || '');
-      setImageBase64(result);
-      setPreview(result);
-    };
-    reader.readAsDataURL(file);
+    setSelectedImageFile(file);
+    setPreview(URL.createObjectURL(file));
   }
 
   async function saveProduct() {
@@ -129,11 +121,12 @@ export default function AdminProductsPage() {
     }
 
     let uploadedUrl: string | null | undefined = undefined;
-    if (imageBase64) {
+    if (selectedImageFile) {
+      const formData = new FormData();
+      formData.append('file', selectedImageFile);
       const uploadRes = await fetch('/api/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64, fileName: imageFileName, productName: form.name })
+        body: formData
       });
 
       if (!uploadRes.ok) {
@@ -192,8 +185,7 @@ export default function AdminProductsPage() {
       active: product.active,
       featured: product.featured
     });
-    setImageFileName(null);
-    setImageBase64(null);
+    setSelectedImageFile(null);
     setPreview(product.main_image_url);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -329,8 +321,7 @@ export default function AdminProductsPage() {
                 className="btn-secondary"
                 onClick={() => {
                   setPreview(null);
-                  setImageBase64(null);
-                  setImageFileName(null);
+                  setSelectedImageFile(null);
                 }}
               >
                 Remover imagem

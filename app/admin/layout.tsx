@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Painel Admin | Açaí da Casa',
+  title: 'Painel Admin | Refrescando',
   manifest: '/admin/manifest.webmanifest'
 };
 
