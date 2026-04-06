@@ -155,6 +155,20 @@ async function hydrateProducts(rows: ProductRow[]) {
   });
 }
 
+function normalizeFreightValue(value: unknown) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? Math.max(0, value) : 0;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.replace(',', '.').replace(/[^\d.]/g, '');
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+  }
+
+  return 0;
+}
+
 export async function listStoreData() {
   if (!process.env.DATABASE_URL) {
     return { categories: demoCategories, products: demoProducts, settings: demoSettings, toppings: demoToppings };
@@ -394,7 +408,7 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       current_origin_updated_at,
       updated_at
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW())
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW())
     ON CONFLICT (id) DO UPDATE SET
       store_name = EXCLUDED.store_name,
       owner_whatsapp_number = EXCLUDED.owner_whatsapp_number,
@@ -424,8 +438,8 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       (input.public_site_url || DEFAULT_SITE_URL).trim(),
       input.freight_enabled ?? false,
       input.free_shipping_enabled ?? true,
-      Math.max(0, Number(input.freight_per_km_cents ?? Math.round(Number(input.freight_per_km_brl ?? 0) * 100))),
-      Math.max(0, Number(input.freight_per_km_brl ?? 0)),
+      Math.max(0, Number(input.freight_per_km_cents ?? Math.round(normalizeFreightValue(input.freight_per_km_brl) * 100))),
+      normalizeFreightValue(input.freight_per_km_brl),
       Number.isFinite(Number(input.store_latitude)) ? Number(input.store_latitude) : null,
       Number.isFinite(Number(input.store_longitude)) ? Number(input.store_longitude) : null,
       (input.store_postal_code || '').replace(/\D/g, '') || null,

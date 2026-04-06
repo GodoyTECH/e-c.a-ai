@@ -156,7 +156,7 @@ export function Storefront({
     <main className="mx-auto max-w-6xl p-4 md:p-8">
       <section className="mb-6 overflow-hidden rounded-3xl border border-white/30 bg-gradient-to-br from-acai via-purple-700 to-fuchsia-700 shadow-xl shadow-purple-500/20">
         <div className="relative">
-          <div className="absolute inset-0 opacity-30">
+          <div className="absolute inset-0">
             {showBannerFallback ? (
               <div className="h-full w-full bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.25),transparent_50%)]" />
             ) : (
