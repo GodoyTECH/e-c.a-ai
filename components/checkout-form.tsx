@@ -54,15 +54,25 @@ export function CheckoutForm() {
       return;
     }
 
-    if (!settings.store_latitude || !settings.store_longitude || !settings.freight_per_km_cents) {
+    if (settings.store_latitude == null || settings.store_longitude == null || !settings.freight_per_km_cents) {
       setFreightEstimateCents(0);
       return;
     }
 
     try {
-      const geocodeRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${fullAddress}, ${postalCode}, Brasil`)}`);
+      const geocodeUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${fullAddress}, ${postalCode}, Brasil`)}`;
+      const geocodeRes = await fetch(geocodeUrl);
       const geocodeData = await geocodeRes.json();
-      const first = geocodeData?.[0];
+      let first = geocodeData?.[0];
+
+      if (!first?.lat || !first?.lon) {
+        const fallbackRes = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${postalCode}, Brasil`)}`
+        );
+        const fallbackData = await fallbackRes.json();
+        first = fallbackData?.[0];
+      }
+
       if (!first?.lat || !first?.lon) {
         setFreightEstimateCents(0);
         return;
