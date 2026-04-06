@@ -172,7 +172,7 @@ export async function listStoreData() {
        ORDER BY p.featured DESC, p.created_at DESC`
     );
     const settingsRes = await db.query(
-      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, store_latitude, store_longitude FROM store_settings WHERE id = 1'
+      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, store_latitude, store_longitude, store_postal_code FROM store_settings WHERE id = 1'
     );
     const toppingsRes = await db.query(
       'SELECT id, name, price_cents, active, sort_order, archived FROM acai_toppings WHERE archived = false ORDER BY sort_order ASC, name ASC'
@@ -359,7 +359,7 @@ export async function getStoreSettings() {
     await ensureDbSchema();
     const db = getDb();
     const res = await db.query(
-      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, store_latitude, store_longitude FROM store_settings WHERE id=1'
+      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, store_latitude, store_longitude, store_postal_code FROM store_settings WHERE id=1'
     );
     return res.rows[0] as StoreSettings;
   } catch (error) {
@@ -386,9 +386,10 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       freight_per_km_cents,
       store_latitude,
       store_longitude,
+      store_postal_code,
       updated_at
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
     ON CONFLICT (id) DO UPDATE SET
       store_name = EXCLUDED.store_name,
       owner_whatsapp_number = EXCLUDED.owner_whatsapp_number,
@@ -401,6 +402,7 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       freight_per_km_cents = EXCLUDED.freight_per_km_cents,
       store_latitude = EXCLUDED.store_latitude,
       store_longitude = EXCLUDED.store_longitude,
+      store_postal_code = EXCLUDED.store_postal_code,
       updated_at = NOW()`,
     [
       1,
@@ -414,7 +416,8 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       input.free_shipping_enabled ?? true,
       Math.max(0, Number(input.freight_per_km_cents ?? 0)),
       Number.isFinite(Number(input.store_latitude)) ? Number(input.store_latitude) : null,
-      Number.isFinite(Number(input.store_longitude)) ? Number(input.store_longitude) : null
+      Number.isFinite(Number(input.store_longitude)) ? Number(input.store_longitude) : null,
+      (input.store_postal_code || '').replace(/\D/g, '') || null
     ]
   );
 }
