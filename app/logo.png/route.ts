@@ -5,7 +5,7 @@ import path from 'path';
 export const runtime = 'nodejs';
 
 export async function GET() {
-  const filePath = path.join(process.cwd(), 'logo.png.png');
+  const filePath = path.join(process.cwd(), 'logo.png');
   const buffer = await readFile(filePath);
   return new NextResponse(buffer, {
     headers: {

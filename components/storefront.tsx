@@ -111,22 +111,32 @@ export function Storefront({
     <main className="mx-auto max-w-6xl p-4 md:p-8">
       <section className="mb-6 overflow-hidden rounded-3xl border border-white/30 bg-gradient-to-br from-acai via-purple-700 to-fuchsia-700 shadow-xl shadow-purple-500/20">
         <div className="relative">
-          <div className="absolute inset-0 opacity-40">
+          <div className="absolute inset-0 opacity-30">
             {showBannerFallback ? (
               <div className="h-full w-full bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.25),transparent_50%)]" />
             ) : (
               <Image src="/banner.svg" alt="Banner Refrescando" fill priority className="object-cover" onError={() => setShowBannerFallback(true)} />
             )}
           </div>
-          <div className="relative z-10 grid gap-4 px-6 py-8 text-white md:px-10 md:py-10">
-            <div className="flex items-center gap-3">
-              <Image src="/logo.png" alt="Logo da loja" width={72} height={72} className="h-14 w-14 rounded-2xl object-cover shadow-lg md:h-16 md:w-16" />
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">Açaí premium delivery</p>
+          <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[42%] bg-gradient-to-l from-white/15 to-transparent md:block" />
+          <div className="relative z-10 grid gap-5 px-6 py-8 text-white sm:px-8 sm:py-10 md:px-10 md:py-12">
+            <div className="flex items-center">
+              <Image
+                src="/logo.png"
+                alt="Logo da loja"
+                width={168}
+                height={168}
+                className="h-20 w-20 rounded-3xl object-cover shadow-2xl shadow-black/20 sm:h-24 sm:w-24 md:h-28 md:w-28"
+              />
             </div>
-            <p className="max-w-2xl text-2xl font-black leading-tight tracking-tight md:text-4xl">Monte seu pedido do seu jeito, com entrega rápida e operação profissional.</p>
-            <p className="max-w-xl text-sm leading-relaxed text-white/90 md:text-base">
-              Escolha tamanho em ML, veja os inclusos do produto e finalize pelo WhatsApp com resumo completo do pedido.
+            <p className="max-w-2xl text-2xl font-black leading-[1.1] tracking-tight sm:text-3xl md:text-5xl">
+              Açaí premium do seu jeito, entregue rápido.
             </p>
+            <p className="max-w-xl text-sm leading-relaxed text-white/90 sm:text-base">
+              Personalize tamanho e adicionais em poucos toques e finalize seu pedido no WhatsApp.
+            </p>
+            <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/10 blur-2xl sm:h-32 sm:w-32" />
+            <div className="pointer-events-none absolute -bottom-10 left-1/3 h-20 w-20 rounded-full bg-fuchsia-200/20 blur-2xl sm:h-28 sm:w-28" />
           </div>
         </div>
       </section>
