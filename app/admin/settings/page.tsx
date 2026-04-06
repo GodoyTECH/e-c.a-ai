@@ -1,5 +1,6 @@
 'use client';
 
+import { nowIso } from '@/lib/time';
 import { useEffect, useMemo, useState } from 'react';
 
 type SettingsForm = {
@@ -11,10 +12,12 @@ type SettingsForm = {
   public_site_url: string;
   freight_enabled: boolean;
   free_shipping_enabled: boolean;
-  freight_per_km_cents: number;
-  store_latitude: string;
-  store_longitude: string;
+  freight_per_km_brl: string;
   store_postal_code: string;
+  delivery_origin_mode: 'store_postal_code' | 'current_location';
+  current_origin_latitude: number | null;
+  current_origin_longitude: number | null;
+  current_origin_updated_at: string | null;
 };
 
 const DEFAULT_PUBLIC_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://refrescando.netlify.app/';
@@ -28,17 +31,26 @@ const defaultForm: SettingsForm = {
   public_site_url: DEFAULT_PUBLIC_SITE_URL,
   freight_enabled: false,
   free_shipping_enabled: true,
-  freight_per_km_cents: 0,
-  store_latitude: '',
-  store_longitude: '',
-  store_postal_code: ''
+  freight_per_km_brl: '0,00',
+  store_postal_code: '',
+  delivery_origin_mode: 'store_postal_code',
+  current_origin_latitude: null,
+  current_origin_longitude: null,
+  current_origin_updated_at: null
 };
 
 const MARKETING_MESSAGE_KEY = 'marketing-message-v1';
 
+function parseFreightValue(value: string) {
+  const normalized = value.replace(',', '.').replace(/[^\d.]/g, '');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+
 export default function AdminSettingsPage() {
   const [form, setForm] = useState<SettingsForm>(defaultForm);
   const [loading, setLoading] = useState(false);
+  const [capturingLocation, setCapturingLocation] = useState(false);
   const [marketingMessage, setMarketingMessage] = useState('');
 
   const defaultMarketingMessage = useMemo(() => {
@@ -71,10 +83,12 @@ ${siteUrl}`;
       public_site_url: data.public_site_url || DEFAULT_PUBLIC_SITE_URL,
       freight_enabled: Boolean(data.freight_enabled),
       free_shipping_enabled: typeof data.free_shipping_enabled === 'boolean' ? data.free_shipping_enabled : true,
-      freight_per_km_cents: Number(data.freight_per_km_cents || 0),
-      store_latitude: data.store_latitude ? String(data.store_latitude) : '',
-      store_longitude: data.store_longitude ? String(data.store_longitude) : '',
-      store_postal_code: data.store_postal_code || ''
+      freight_per_km_brl: Number(data.freight_per_km_brl ?? Number(data.freight_per_km_cents || 0) / 100).toFixed(2).replace('.', ','),
+      store_postal_code: data.store_postal_code || '',
+      delivery_origin_mode: data.delivery_origin_mode === 'current_location' ? 'current_location' : 'store_postal_code',
+      current_origin_latitude: Number.isFinite(Number(data.current_origin_latitude)) ? Number(data.current_origin_latitude) : null,
+      current_origin_longitude: Number.isFinite(Number(data.current_origin_longitude)) ? Number(data.current_origin_longitude) : null,
+      current_origin_updated_at: data.current_origin_updated_at || null
     }));
   }
 
@@ -88,15 +102,45 @@ ${siteUrl}`;
     setMarketingMessage(stored || defaultMarketingMessage);
   }, [defaultMarketingMessage]);
 
+  async function captureCurrentLocation() {
+    if (!navigator.geolocation) {
+      alert('Geolocalização indisponível no navegador.');
+      return;
+    }
+
+    setCapturingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setCapturingLocation(false);
+        setForm((prev) => ({
+          ...prev,
+          delivery_origin_mode: 'current_location',
+          current_origin_latitude: Number(position.coords.latitude.toFixed(6)),
+          current_origin_longitude: Number(position.coords.longitude.toFixed(6)),
+          current_origin_updated_at: nowIso()
+        }));
+      },
+      () => {
+        setCapturingLocation(false);
+        alert('Permissão negada ou falha ao capturar localização. Mantendo origem por CEP da loja.');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
   async function onSave() {
     setLoading(true);
+    const freightPerKm = parseFreightValue(form.freight_per_km_brl);
+
     const payload = {
       ...form,
       owner_whatsapp_number: form.owner_whatsapp_number.replace(/\D/g, ''),
       public_site_url: form.public_site_url.trim(),
-      store_latitude: form.store_latitude ? Number(form.store_latitude) : null,
-      store_longitude: form.store_longitude ? Number(form.store_longitude) : null,
-      store_postal_code: form.store_postal_code.replace(/\D/g, '')
+      freight_per_km_brl: freightPerKm,
+      freight_per_km_cents: Math.round(freightPerKm * 100),
+      store_postal_code: form.store_postal_code.replace(/\D/g, ''),
+      store_latitude: null,
+      store_longitude: null
     };
 
     const res = await fetch('/api/admin/settings', {
@@ -132,18 +176,42 @@ ${siteUrl}`;
           <h2 className="font-semibold">Frete por quilômetro</h2>
           <label className="flex items-center gap-2"><input type="checkbox" checked={form.freight_enabled} onChange={(e) => setForm({ ...form, freight_enabled: e.target.checked })} /> Frete ativo</label>
           <label className="flex items-center gap-2"><input type="checkbox" checked={form.free_shipping_enabled} onChange={(e) => setForm({ ...form, free_shipping_enabled: e.target.checked })} /> Frete grátis</label>
-          <input className="w-full rounded-xl border px-3 py-2" type="number" min={0} value={form.freight_per_km_cents} onChange={(e) => setForm({ ...form, freight_per_km_cents: Number(e.target.value) })} placeholder="Valor por km (em centavos)" />
+          <input className="w-full rounded-xl border px-3 py-2" value={form.freight_per_km_brl} onChange={(e) => setForm({ ...form, freight_per_km_brl: e.target.value })} placeholder="Valor por km (R$), ex: 0,20 ou 1.75" />
           <input
             className="w-full rounded-xl border px-3 py-2"
             value={form.store_postal_code}
             onChange={(e) => setForm({ ...form, store_postal_code: e.target.value })}
-            placeholder="CEP da loja (opcional para cálculo automático)"
+            placeholder="CEP da loja (fallback)"
           />
-          <div className="grid gap-2 sm:grid-cols-2">
-            <input className="w-full rounded-xl border px-3 py-2" value={form.store_latitude} onChange={(e) => setForm({ ...form, store_latitude: e.target.value })} placeholder="Latitude da loja" />
-            <input className="w-full rounded-xl border px-3 py-2" value={form.store_longitude} onChange={(e) => setForm({ ...form, store_longitude: e.target.value })} placeholder="Longitude da loja" />
+          <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+            <p className="font-semibold text-slate-700">Origem da entrega</p>
+            <label className="mt-2 flex items-center gap-2">
+              <input
+                type="radio"
+                checked={form.delivery_origin_mode === 'store_postal_code'}
+                onChange={() => setForm((prev) => ({ ...prev, delivery_origin_mode: 'store_postal_code' }))}
+              />
+              Usar CEP da loja como origem
+            </label>
+            <label className="mt-1 flex items-center gap-2">
+              <input
+                type="radio"
+                checked={form.delivery_origin_mode === 'current_location'}
+                onChange={() => setForm((prev) => ({ ...prev, delivery_origin_mode: 'current_location' }))}
+              />
+              Usar localização atual do entregador
+            </label>
+            <button className="btn-secondary mt-2" type="button" onClick={captureCurrentLocation}>
+              {capturingLocation ? 'Capturando localização...' : 'Usar localização atual'}
+            </button>
+            {form.current_origin_latitude != null && form.current_origin_longitude != null && (
+              <p className="mt-2">
+                Origem atual: {form.current_origin_latitude}, {form.current_origin_longitude}
+                {form.current_origin_updated_at ? ` • Atualizada em ${new Date(form.current_origin_updated_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` : ''}
+              </p>
+            )}
           </div>
-          <p className="text-xs text-slate-500">Você pode informar CEP da loja ou latitude/longitude. Sem localização da loja, o frete fica em R$ 0,00.</p>
+          <p className="text-xs text-slate-500">Sem localização atual e sem CEP da loja, o sistema aplica fallback seguro de frete R$ 0,00.</p>
         </div>
 
         <button className="btn-primary" disabled={loading} onClick={onSave}>{loading ? 'Salvando...' : 'Salvar configurações'}</button>

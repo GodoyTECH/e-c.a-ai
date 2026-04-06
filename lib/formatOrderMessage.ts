@@ -1,5 +1,6 @@
 import { PaymentMethod } from './types';
 import { currencyBRL } from './utils';
+import { formatDateTimeBR } from './time';
 
 type MessageOrderItem = {
   name: string;
@@ -43,7 +44,7 @@ export function gerarMensagemPedido(order: MessageOrder) {
     order.orderCode ? `Pedido: #${order.orderCode}` : null,
     `Cliente: ${order.customerName}`,
     `Telefone: ${order.customerPhone}`,
-    `Data: ${new Date(order.createdAt || Date.now()).toLocaleString('pt-BR')}`,
+    `Data: ${formatDateTimeBR(order.createdAt || Date.now())}`,
     '',
     'Itens:'
   ].filter(Boolean) as string[];

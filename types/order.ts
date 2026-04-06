@@ -12,6 +12,8 @@ export type CheckoutPayload = {
   mapsLink?: string | null;
   addressConfirmed?: boolean;
   freightCents?: number;
+  customerLatitude?: number | null;
+  customerLongitude?: number | null;
   notes?: string;
   items: {
     productId: string;

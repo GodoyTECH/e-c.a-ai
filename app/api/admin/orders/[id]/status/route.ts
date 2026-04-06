@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 const schema = z.object({
-  status: z.enum(['confirmed', 'rejected']),
+  status: z.enum(['confirmed', 'rejected', 'preparing', 'delivered']),
   reason: z.string().optional()
 });
 

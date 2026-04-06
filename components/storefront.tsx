@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Category, Product, ProductSize, Topping } from '@/lib/types';
 import { currencyBRL } from '@/lib/utils';
 import { useCart } from './cart-context';
+import { BrClock } from './br-clock';
 
 function createLineId(
   productId: string,
@@ -159,12 +160,12 @@ export function Storefront({
             {showBannerFallback ? (
               <div className="h-full w-full bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.25),transparent_50%)]" />
             ) : (
-              <Image src="/banner.svg" alt="Banner Refrescando" fill priority className="object-cover" onError={() => setShowBannerFallback(true)} />
+              <Image src="/banner.png" alt="Banner Refrescando" fill priority className="object-cover" onError={() => setShowBannerFallback(true)} />
             )}
           </div>
           <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[42%] bg-gradient-to-l from-white/15 to-transparent md:block" />
           <div className="relative z-10 grid gap-5 px-6 py-8 text-white sm:px-8 sm:py-10 md:px-10 md:py-12">
-            <div className="flex items-center">
+            <div className="flex items-start justify-between gap-3">
               <Image
                 src="/logo.png"
                 alt="Logo da loja"
@@ -172,6 +173,7 @@ export function Storefront({
                 height={168}
                 className="h-20 w-20 rounded-3xl object-cover shadow-2xl shadow-black/20 sm:h-24 sm:w-24 md:h-28 md:w-28"
               />
+              <BrClock className="border-white/30 bg-black/20 text-white [&>p]:text-white" />
             </div>
             <p className="max-w-2xl text-2xl font-black leading-[1.1] tracking-tight sm:text-3xl md:text-5xl">
               Açaí premium do seu jeito, entregue rápido.

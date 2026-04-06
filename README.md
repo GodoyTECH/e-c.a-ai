@@ -192,6 +192,15 @@ Comportamento no checkout:
 - os dois ativos → mostra os dois
 - nenhum ativo → checkout bloqueado com mensagem clara
 
+## Operação de entregas (fase atual)
+
+- Origem de frete/rota com prioridade: **localização atual do entregador** (quando habilitada no admin) → **CEP da loja**.
+- Cliente no checkout pode escolher entre **CEP** ou **Usar localização atual**.
+- Cálculo de frete por km aceitando decimal em reais (`0,20`, `1.75`, etc.).
+- Estratégias no painel de pedidos: **rota mais rápida**, **rota mais econômica** e **ordem por horário**.
+- Ordenação e exibição de horários normalizadas para **America/Sao_Paulo (Brasília)**.
+- Base plugável de roteirização em `lib/routing.ts` com interface pronta para provedor externo.
+
 ## Limitações da abordagem atual (fase 1)
 
 - Depende do cliente ter WhatsApp disponível

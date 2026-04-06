@@ -172,7 +172,7 @@ export async function listStoreData() {
        ORDER BY p.featured DESC, p.created_at DESC`
     );
     const settingsRes = await db.query(
-      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, store_latitude, store_longitude, store_postal_code FROM store_settings WHERE id = 1'
+      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, freight_per_km_brl, store_latitude, store_longitude, store_postal_code, delivery_origin_mode, current_origin_latitude, current_origin_longitude, current_origin_updated_at FROM store_settings WHERE id = 1'
     );
     const toppingsRes = await db.query(
       'SELECT id, name, price_cents, active, sort_order, archived FROM acai_toppings WHERE archived = false ORDER BY sort_order ASC, name ASC'
@@ -359,7 +359,7 @@ export async function getStoreSettings() {
     await ensureDbSchema();
     const db = getDb();
     const res = await db.query(
-      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, store_latitude, store_longitude, store_postal_code FROM store_settings WHERE id=1'
+      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, freight_per_km_brl, store_latitude, store_longitude, store_postal_code, delivery_origin_mode, current_origin_latitude, current_origin_longitude, current_origin_updated_at FROM store_settings WHERE id=1'
     );
     return res.rows[0] as StoreSettings;
   } catch (error) {
@@ -384,12 +384,17 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       freight_enabled,
       free_shipping_enabled,
       freight_per_km_cents,
+      freight_per_km_brl,
       store_latitude,
       store_longitude,
       store_postal_code,
+      delivery_origin_mode,
+      current_origin_latitude,
+      current_origin_longitude,
+      current_origin_updated_at,
       updated_at
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW())
     ON CONFLICT (id) DO UPDATE SET
       store_name = EXCLUDED.store_name,
       owner_whatsapp_number = EXCLUDED.owner_whatsapp_number,
@@ -400,9 +405,14 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       freight_enabled = EXCLUDED.freight_enabled,
       free_shipping_enabled = EXCLUDED.free_shipping_enabled,
       freight_per_km_cents = EXCLUDED.freight_per_km_cents,
+      freight_per_km_brl = EXCLUDED.freight_per_km_brl,
       store_latitude = EXCLUDED.store_latitude,
       store_longitude = EXCLUDED.store_longitude,
       store_postal_code = EXCLUDED.store_postal_code,
+      delivery_origin_mode = EXCLUDED.delivery_origin_mode,
+      current_origin_latitude = EXCLUDED.current_origin_latitude,
+      current_origin_longitude = EXCLUDED.current_origin_longitude,
+      current_origin_updated_at = EXCLUDED.current_origin_updated_at,
       updated_at = NOW()`,
     [
       1,
@@ -414,10 +424,15 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       (input.public_site_url || DEFAULT_SITE_URL).trim(),
       input.freight_enabled ?? false,
       input.free_shipping_enabled ?? true,
-      Math.max(0, Number(input.freight_per_km_cents ?? 0)),
+      Math.max(0, Number(input.freight_per_km_cents ?? Math.round(Number(input.freight_per_km_brl ?? 0) * 100))),
+      Math.max(0, Number(input.freight_per_km_brl ?? 0)),
       Number.isFinite(Number(input.store_latitude)) ? Number(input.store_latitude) : null,
       Number.isFinite(Number(input.store_longitude)) ? Number(input.store_longitude) : null,
-      (input.store_postal_code || '').replace(/\D/g, '') || null
+      (input.store_postal_code || '').replace(/\D/g, '') || null,
+      input.delivery_origin_mode === 'current_location' ? 'current_location' : 'store_postal_code',
+      Number.isFinite(Number(input.current_origin_latitude)) ? Number(input.current_origin_latitude) : null,
+      Number.isFinite(Number(input.current_origin_longitude)) ? Number(input.current_origin_longitude) : null,
+      input.current_origin_updated_at ?? null
     ]
   );
 }
