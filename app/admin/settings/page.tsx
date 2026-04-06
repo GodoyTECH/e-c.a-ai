@@ -9,6 +9,11 @@ type SettingsForm = {
   allow_pickup: boolean;
   default_order_message: string;
   public_site_url: string;
+  freight_enabled: boolean;
+  free_shipping_enabled: boolean;
+  freight_per_km_cents: number;
+  store_latitude: string;
+  store_longitude: string;
 };
 
 const DEFAULT_PUBLIC_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://refrescando.netlify.app/';
@@ -19,7 +24,12 @@ const defaultForm: SettingsForm = {
   allow_delivery: true,
   allow_pickup: true,
   default_order_message: '',
-  public_site_url: DEFAULT_PUBLIC_SITE_URL
+  public_site_url: DEFAULT_PUBLIC_SITE_URL,
+  freight_enabled: false,
+  free_shipping_enabled: true,
+  freight_per_km_cents: 0,
+  store_latitude: '',
+  store_longitude: ''
 };
 
 const MARKETING_MESSAGE_KEY = 'marketing-message-v1';
@@ -31,7 +41,11 @@ export default function AdminSettingsPage() {
 
   const defaultMarketingMessage = useMemo(() => {
     const siteUrl = form.public_site_url?.trim() || DEFAULT_PUBLIC_SITE_URL;
-    return `🍧 Bateu vontade de um açaí geladinho?\n\nTemos opções deliciosas com acompanhamentos incríveis e entrega rápida! 😍\nFaça seu pedido agora pelo cardápio digital:\n${siteUrl}`;
+    return `🍧 Bateu vontade de um açaí geladinho?
+
+Temos opções deliciosas com acompanhamentos incríveis e entrega rápida! 😍
+Faça seu pedido agora pelo cardápio digital:
+${siteUrl}`;
   }, [form.public_site_url]);
 
   async function loadSettings() {
@@ -52,7 +66,12 @@ export default function AdminSettingsPage() {
       allow_delivery: typeof data.allow_delivery === 'boolean' ? data.allow_delivery : true,
       allow_pickup: typeof data.allow_pickup === 'boolean' ? data.allow_pickup : true,
       default_order_message: data.default_order_message || '',
-      public_site_url: data.public_site_url || DEFAULT_PUBLIC_SITE_URL
+      public_site_url: data.public_site_url || DEFAULT_PUBLIC_SITE_URL,
+      freight_enabled: Boolean(data.freight_enabled),
+      free_shipping_enabled: typeof data.free_shipping_enabled === 'boolean' ? data.free_shipping_enabled : true,
+      freight_per_km_cents: Number(data.freight_per_km_cents || 0),
+      store_latitude: data.store_latitude ? String(data.store_latitude) : '',
+      store_longitude: data.store_longitude ? String(data.store_longitude) : ''
     }));
   }
 
@@ -71,7 +90,9 @@ export default function AdminSettingsPage() {
     const payload = {
       ...form,
       owner_whatsapp_number: form.owner_whatsapp_number.replace(/\D/g, ''),
-      public_site_url: form.public_site_url.trim()
+      public_site_url: form.public_site_url.trim(),
+      store_latitude: form.store_latitude ? Number(form.store_latitude) : null,
+      store_longitude: form.store_longitude ? Number(form.store_longitude) : null
     };
 
     const res = await fetch('/api/admin/settings', {
@@ -91,31 +112,6 @@ export default function AdminSettingsPage() {
     alert('Configurações salvas e aplicadas.');
   }
 
-  async function shareMarketing() {
-    const text = marketingMessage.trim() || defaultMarketingMessage;
-    const title = form.store_name ? `Promoção - ${form.store_name}` : 'Promoção de Açaí';
-
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      try {
-        await navigator.share({
-          title,
-          text
-        });
-        return;
-      } catch {
-        // fallback para clipboard abaixo
-      }
-    }
-
-    try {
-      await navigator.clipboard.writeText(text);
-      alert('Mensagem copiada! Agora é só colar no app que preferir.');
-    } catch {
-      const encoded = encodeURIComponent(text);
-      window.open(`https://wa.me/?text=${encoded}`, '_blank', 'noopener,noreferrer');
-    }
-  }
-
   return (
     <main className="mx-auto max-w-3xl space-y-4 p-4 md:p-8">
       <section className="card glass-card space-y-3">
@@ -127,6 +123,18 @@ export default function AdminSettingsPage() {
 
         <label className="flex items-center gap-2"><input type="checkbox" checked={form.allow_delivery} onChange={(e) => setForm({ ...form, allow_delivery: e.target.checked })} /> Entrega</label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={form.allow_pickup} onChange={(e) => setForm({ ...form, allow_pickup: e.target.checked })} /> Retirada</label>
+
+        <div className="rounded-xl border p-3 space-y-2">
+          <h2 className="font-semibold">Frete por quilômetro</h2>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={form.freight_enabled} onChange={(e) => setForm({ ...form, freight_enabled: e.target.checked })} /> Frete ativo</label>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={form.free_shipping_enabled} onChange={(e) => setForm({ ...form, free_shipping_enabled: e.target.checked })} /> Frete grátis</label>
+          <input className="w-full rounded-xl border px-3 py-2" type="number" min={0} value={form.freight_per_km_cents} onChange={(e) => setForm({ ...form, freight_per_km_cents: Number(e.target.value) })} placeholder="Valor por km (em centavos)" />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input className="w-full rounded-xl border px-3 py-2" value={form.store_latitude} onChange={(e) => setForm({ ...form, store_latitude: e.target.value })} placeholder="Latitude da loja" />
+            <input className="w-full rounded-xl border px-3 py-2" value={form.store_longitude} onChange={(e) => setForm({ ...form, store_longitude: e.target.value })} placeholder="Longitude da loja" />
+          </div>
+          <p className="text-xs text-slate-500">Para cálculo automático, preencha latitude/longitude da loja. Sem coordenadas, o frete fica em R$ 0,00.</p>
+        </div>
 
         <button className="btn-primary" disabled={loading} onClick={onSave}>{loading ? 'Salvando...' : 'Salvar configurações'}</button>
       </section>
@@ -145,21 +153,6 @@ export default function AdminSettingsPage() {
           }}
           placeholder="Escreva a mensagem de divulgação"
         />
-        <div className="flex flex-wrap gap-2">
-          <button className="btn-primary" type="button" onClick={shareMarketing}>
-            Compartilhar mensagem
-          </button>
-          <button
-            className="btn-secondary"
-            type="button"
-            onClick={() => {
-              setMarketingMessage(defaultMarketingMessage);
-              localStorage.setItem(MARKETING_MESSAGE_KEY, defaultMarketingMessage);
-            }}
-          >
-            Restaurar mensagem padrão
-          </button>
-        </div>
       </section>
     </main>
   );

@@ -80,4 +80,9 @@ export type StoreSettings = {
   allow_pickup: boolean;
   default_order_message: string | null;
   public_site_url: string;
+  freight_enabled?: boolean;
+  free_shipping_enabled?: boolean;
+  freight_per_km_cents?: number;
+  store_latitude?: number | null;
+  store_longitude?: number | null;
 };

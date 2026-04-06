@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdminAuthenticated } from '@/lib/auth';
-import { listToppings, seedDefaultToppings, updateToppingStatus } from '@/services/product-service';
+import { listToppings, seedDefaultToppings, upsertTopping } from '@/services/product-service';
+
+function parsePriceToCents(value: unknown) {
+  if (typeof value === 'number') return Math.max(0, Math.round(value));
+  if (typeof value !== 'string') return 0;
+  const normalized = value.trim().replace(',', '.');
+  const numeric = Number.parseFloat(normalized);
+  if (!Number.isFinite(numeric) || numeric < 0) return 0;
+  return Math.round(numeric * 100);
+}
 
 export async function GET() {
   if (!(await isAdminAuthenticated())) {
@@ -11,13 +20,31 @@ export async function GET() {
   return NextResponse.json(toppings);
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   if (!(await isAdminAuthenticated())) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
   }
 
-  await seedDefaultToppings();
-  return NextResponse.json({ ok: true });
+  const body = await request.json().catch(() => null);
+  if (!body || body.seed === true) {
+    await seedDefaultToppings();
+    return NextResponse.json({ ok: true });
+  }
+
+  if (!body.name || typeof body.name !== 'string') {
+    return NextResponse.json({ error: 'Nome obrigatório.' }, { status: 400 });
+  }
+
+  const id = await upsertTopping({
+    id: body.id,
+    name: body.name,
+    price_cents: parsePriceToCents(body.price_cents),
+    active: typeof body.active === 'boolean' ? body.active : true,
+    sort_order: Number.isFinite(Number(body.sort_order)) ? Number(body.sort_order) : 0,
+    archived: typeof body.archived === 'boolean' ? body.archived : false
+  });
+
+  return NextResponse.json({ ok: true, id });
 }
 
 export async function PATCH(request: NextRequest) {
@@ -26,10 +53,17 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json();
-  if (!body?.id || typeof body.active !== 'boolean') {
+  if (!body?.id) {
     return NextResponse.json({ error: 'Payload inválido.' }, { status: 400 });
   }
 
-  await updateToppingStatus(body.id, body.active);
+  await upsertTopping({
+    id: body.id,
+    name: String(body.name || '').trim(),
+    price_cents: parsePriceToCents(body.price_cents),
+    active: typeof body.active === 'boolean' ? body.active : true,
+    sort_order: Number.isFinite(Number(body.sort_order)) ? Number(body.sort_order) : 0,
+    archived: typeof body.archived === 'boolean' ? body.archived : false
+  });
   return NextResponse.json({ ok: true });
 }

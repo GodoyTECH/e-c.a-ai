@@ -184,3 +184,16 @@ CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_product_sizes_product_id ON product_sizes(product_id);
 CREATE INDEX IF NOT EXISTS idx_product_optional_toppings_product_id ON product_optional_toppings(product_id);
 CREATE INDEX IF NOT EXISTS idx_product_included_toppings_product_id ON product_included_toppings(product_id);
+
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS postal_code TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS maps_link TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS address_confirmed BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS freight_cents INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS distance_km NUMERIC(10,2);
+
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS freight_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS free_shipping_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS freight_per_km_cents INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS store_latitude DOUBLE PRECISION;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS store_longitude DOUBLE PRECISION;
