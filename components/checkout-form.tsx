@@ -15,6 +15,8 @@ type AddressLookup = {
   complement: string;
   confirmed: boolean;
   mapsLink: string;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 function formatCepValue(value: string) {
@@ -23,9 +25,21 @@ function formatCepValue(value: string) {
   return `${digits.slice(0, 5)}-${digits.slice(5)}`;
 }
 
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const toRad = (v: number) => (v * Math.PI) / 180;
+  const earthKm = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return earthKm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
 export function CheckoutForm() {
   const { items, totalCents, addItem, removeItem, clear } = useCart();
   const [loading, setLoading] = useState(false);
+  const [loadingLocation, setLoadingLocation] = useState(false);
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [orderType, setOrderType] = useState<'delivery' | 'pickup'>('delivery');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');
@@ -47,9 +61,42 @@ export function CheckoutForm() {
     settings?.allow_pickup ? { label: 'Retirada', value: 'pickup' as const } : null
   ].filter(Boolean) as { label: string; value: 'delivery' | 'pickup' }[];
 
-  const totalWithFreight = useMemo(() => totalCents + (orderType === 'delivery' ? freightEstimateCents : 0), [orderType, totalCents, freightEstimateCents]);
+  const totalWithFreight = useMemo(
+    () => totalCents + (orderType === 'delivery' ? freightEstimateCents : 0),
+    [orderType, totalCents, freightEstimateCents]
+  );
 
-  async function calculateFreight(postalCode: string, fullAddress: string) {
+  async function resolveOriginCoordinates() {
+    const hasCurrentOrigin =
+      settings?.delivery_origin_mode === 'current_location' &&
+      settings?.current_origin_latitude != null &&
+      settings?.current_origin_longitude != null;
+
+    if (hasCurrentOrigin) {
+      return {
+        latitude: Number(settings.current_origin_latitude),
+        longitude: Number(settings.current_origin_longitude)
+      };
+    }
+
+    if (settings?.store_postal_code) {
+      const storeCepRes = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${settings.store_postal_code}, Brasil`)}`
+      );
+      const storeCepData = await storeCepRes.json();
+      const storeLocation = storeCepData?.[0];
+      if (storeLocation?.lat && storeLocation?.lon) {
+        return {
+          latitude: Number(storeLocation.lat),
+          longitude: Number(storeLocation.lon)
+        };
+      }
+    }
+
+    return null;
+  }
+
+  async function calculateFreight(destination: { postalCode?: string; fullAddress?: string; latitude?: number | null; longitude?: number | null }) {
     setFreightCalculated(false);
 
     if (!settings?.freight_enabled || settings?.free_shipping_enabled) {
@@ -58,66 +105,51 @@ export function CheckoutForm() {
       return;
     }
 
-    if (!settings.freight_per_km_cents) {
+    const freightPerKmBrl = Number(settings.freight_per_km_brl ?? Number(settings.freight_per_km_cents || 0) / 100);
+    if (!freightPerKmBrl || freightPerKmBrl <= 0) {
       setFreightEstimateCents(0);
       setFreightCalculated(true);
       return;
     }
 
     try {
-      let originLat = settings.store_latitude != null ? Number(settings.store_latitude) : null;
-      let originLon = settings.store_longitude != null ? Number(settings.store_longitude) : null;
-
-      if ((originLat == null || originLon == null) && settings.store_postal_code) {
-        const storeCepRes = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${settings.store_postal_code}, Brasil`)}`
-        );
-        const storeCepData = await storeCepRes.json();
-        const storeLocation = storeCepData?.[0];
-        if (storeLocation?.lat && storeLocation?.lon) {
-          originLat = Number(storeLocation.lat);
-          originLon = Number(storeLocation.lon);
-        }
-      }
-
-      if (originLat == null || originLon == null) {
+      const origin = await resolveOriginCoordinates();
+      if (!origin) {
         setFreightEstimateCents(0);
         setFreightCalculated(true);
         return;
       }
 
-      const geocodeUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${fullAddress}, ${postalCode}, Brasil`)}`;
-      const geocodeRes = await fetch(geocodeUrl);
-      const geocodeData = await geocodeRes.json();
-      let first = geocodeData?.[0];
+      let destinationLat = destination.latitude ?? null;
+      let destinationLon = destination.longitude ?? null;
 
-      if (!first?.lat || !first?.lon) {
+      if ((destinationLat == null || destinationLon == null) && destination.fullAddress && destination.postalCode) {
+        const geocodeUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${destination.fullAddress}, ${destination.postalCode}, Brasil`)}`;
+        const geocodeRes = await fetch(geocodeUrl);
+        const geocodeData = await geocodeRes.json();
+        const first = geocodeData?.[0];
+        destinationLat = first?.lat ? Number(first.lat) : null;
+        destinationLon = first?.lon ? Number(first.lon) : null;
+      }
+
+      if ((destinationLat == null || destinationLon == null) && destination.postalCode) {
         const fallbackRes = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${postalCode}, Brasil`)}`
+          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${destination.postalCode}, Brasil`)}`
         );
         const fallbackData = await fallbackRes.json();
-        first = fallbackData?.[0];
+        const first = fallbackData?.[0];
+        destinationLat = first?.lat ? Number(first.lat) : null;
+        destinationLon = first?.lon ? Number(first.lon) : null;
       }
 
-      if (!first?.lat || !first?.lon) {
+      if (destinationLat == null || destinationLon == null) {
         setFreightEstimateCents(0);
         setFreightCalculated(true);
         return;
       }
 
-      const lat1 = Number(originLat);
-      const lon1 = Number(originLon);
-      const lat2 = Number(first.lat);
-      const lon2 = Number(first.lon);
-      const toRad = (v: number) => (v * Math.PI) / 180;
-      const earthKm = 6371;
-      const dLat = toRad(lat2 - lat1);
-      const dLon = toRad(lon2 - lon1);
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const distanceKm = earthKm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-      setFreightEstimateCents(Math.round(distanceKm * settings.freight_per_km_cents));
+      const distanceKm = haversineKm(origin.latitude, origin.longitude, destinationLat, destinationLon);
+      setFreightEstimateCents(Math.round(distanceKm * freightPerKmBrl * 100));
       setFreightCalculated(true);
     } catch {
       setFreightEstimateCents(0);
@@ -163,7 +195,74 @@ export function CheckoutForm() {
     });
 
     setFreightCalculated(false);
-    await calculateFreight(cep, addressText);
+    await calculateFreight({ postalCode: cep, fullAddress: addressText });
+  }
+
+  function useCurrentCustomerLocation() {
+    if (!navigator.geolocation) {
+      alert('Geolocalização indisponível neste navegador.');
+      return;
+    }
+
+    setLoadingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const latitude = Number(position.coords.latitude.toFixed(6));
+        const longitude = Number(position.coords.longitude.toFixed(6));
+        const mapsLink = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+
+        try {
+          const reverseRes = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+          );
+          const reverseData = await reverseRes.json();
+          const addr = reverseData?.address || {};
+          const street = addr.road || addr.pedestrian || reverseData?.name || 'Localização atual';
+          const neighborhood = addr.suburb || addr.neighbourhood || '';
+          const city = addr.city || addr.town || addr.village || '';
+          const state = addr.state_code || addr.state || '';
+          const cep = (addr.postcode || '').replace(/\D/g, '').slice(0, 8);
+
+          setAddressData({
+            cep,
+            street,
+            neighborhood,
+            city,
+            state,
+            number: addr.house_number || '',
+            complement: '',
+            mapsLink,
+            confirmed: true,
+            latitude,
+            longitude
+          });
+
+          await calculateFreight({ postalCode: cep, fullAddress: reverseData?.display_name || street, latitude, longitude });
+        } catch {
+          setAddressData({
+            cep: '',
+            street: 'Localização atual',
+            neighborhood: '',
+            city: '',
+            state: '',
+            number: '',
+            complement: '',
+            mapsLink,
+            confirmed: true,
+            latitude,
+            longitude
+          });
+          await calculateFreight({ latitude, longitude });
+        }
+
+        setLoadingLocation(false);
+      },
+      () => {
+        setLoadingLocation(false);
+        alert('Não foi possível usar sua localização atual. Você pode continuar pelo CEP.');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -200,6 +299,8 @@ export function CheckoutForm() {
       mapsLink: addressData?.mapsLink || null,
       addressConfirmed: Boolean(addressData?.confirmed),
       freightCents: orderType === 'delivery' ? freightEstimateCents : 0,
+      customerLatitude: addressData?.latitude ?? null,
+      customerLongitude: addressData?.longitude ?? null,
       notes: String(formData.get('notes') || ''),
       items: items.map((item) => ({
         productId: item.productId,
@@ -291,7 +392,7 @@ export function CheckoutForm() {
                 ? 'Grátis'
                 : freightCalculated
                   ? currencyBRL(freightEstimateCents)
-                  : 'Informe o CEP para calcular'}
+                  : 'Informe o CEP ou use sua localização atual'}
             </p>
             <p>Subtotal do pedido: {currencyBRL(totalCents)}</p>
             <p className="font-semibold">Pedido + frete: {currencyBRL(totalWithFreight)}</p>
@@ -344,12 +445,17 @@ export function CheckoutForm() {
         {orderType === 'delivery' ? (
           <section className="space-y-2 rounded-xl border p-3">
             <h3 className="font-semibold">Endereço de entrega</h3>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="btn-secondary" onClick={useCurrentCustomerLocation}>
+                {loadingLocation ? 'Capturando localização...' : 'Usar localização atual'}
+              </button>
+              <p className="text-xs text-slate-500">Ou preencha o CEP abaixo.</p>
+            </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <input
                 name="postalCode"
                 placeholder="CEP"
                 className="rounded-xl border px-3 py-2"
-                required
                 maxLength={9}
                 inputMode="numeric"
                 pattern="^\d{5}-?\d{3}$"
@@ -357,13 +463,13 @@ export function CheckoutForm() {
                   event.currentTarget.value = formatCepValue(event.currentTarget.value);
                 }}
               />
-              <input name="addressNumber" placeholder="Número" className="rounded-xl border px-3 py-2" required />
+              <input name="addressNumber" placeholder="Número" className="rounded-xl border px-3 py-2" />
             </div>
             <input name="addressComplement" placeholder="Complemento (opcional)" className="w-full rounded-xl border px-3 py-2" />
             <button type="button" className="btn-secondary" onClick={(event) => onLookupCep(event.currentTarget.form!)}>Buscar e validar CEP</button>
             {addressData && (
               <div className="rounded-xl bg-slate-50 p-3 text-sm">
-                <p><strong>Endereço encontrado:</strong> {addressData.street}, {addressData.number || 's/n'}{addressData.complement ? ` - ${addressData.complement}` : ''}, {addressData.neighborhood}, {addressData.city}-{addressData.state} | CEP {addressData.cep}</p>
+                <p><strong>Endereço encontrado:</strong> {addressData.street}, {addressData.number || 's/n'}{addressData.complement ? ` - ${addressData.complement}` : ''}, {addressData.neighborhood}, {addressData.city}-{addressData.state} {addressData.cep ? `| CEP ${addressData.cep}` : ''}</p>
                 <a href={addressData.mapsLink} target="_blank" rel="noreferrer" className="mt-2 inline-block text-acai underline">Clique no link para confirmar seu endereço no mapa</a>
                 <label className="mt-2 flex items-center gap-2"><input type="checkbox" checked={addressData.confirmed} onChange={(event) => setAddressData((prev) => prev ? { ...prev, confirmed: event.target.checked } : prev)} />Confirmo que o endereço está correto no mapa</label>
               </div>

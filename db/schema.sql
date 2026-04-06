@@ -191,10 +191,18 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS maps_link TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS address_confirmed BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS freight_cents INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS distance_km NUMERIC(10,2);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_latitude DOUBLE PRECISION;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_longitude DOUBLE PRECISION;
 
 ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS freight_enabled BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS free_shipping_enabled BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS freight_per_km_cents INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS freight_per_km_brl NUMERIC(10,2) NOT NULL DEFAULT 0;
 ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS store_latitude DOUBLE PRECISION;
 ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS store_longitude DOUBLE PRECISION;
 ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS store_postal_code TEXT;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS delivery_origin_mode TEXT NOT NULL DEFAULT 'store_postal_code';
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS current_origin_latitude DOUBLE PRECISION;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS current_origin_longitude DOUBLE PRECISION;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS current_origin_updated_at TIMESTAMPTZ;
+UPDATE store_settings SET freight_per_km_brl = COALESCE(freight_per_km_brl, freight_per_km_cents / 100.0, 0);
