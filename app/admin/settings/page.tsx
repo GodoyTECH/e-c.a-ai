@@ -128,9 +128,35 @@ ${siteUrl}`;
     );
   }
 
+  function resetDeliveryOrigin() {
+    setForm((prev) => ({
+      ...prev,
+      delivery_origin_mode: 'store_postal_code',
+      store_postal_code: '',
+      current_origin_latitude: null,
+      current_origin_longitude: null,
+      current_origin_updated_at: null
+    }));
+  }
+
   async function onSave() {
     setLoading(true);
     const freightPerKm = parseFreightValue(form.freight_per_km_brl);
+    const sanitizedPostalCode = form.store_postal_code.replace(/\D/g, '');
+    const shouldUseCurrentLocation = form.delivery_origin_mode === 'current_location';
+    const hasCurrentCoordinates = form.current_origin_latitude != null && form.current_origin_longitude != null;
+
+    if (shouldUseCurrentLocation && !hasCurrentCoordinates) {
+      setLoading(false);
+      alert('Capture a localização atual antes de salvar quando a origem selecionada for localização atual.');
+      return;
+    }
+
+    if (!shouldUseCurrentLocation && !sanitizedPostalCode) {
+      setLoading(false);
+      alert('Informe o CEP da loja ou selecione localização atual para garantir o recálculo de frete.');
+      return;
+    }
 
     const payload = {
       ...form,
@@ -138,7 +164,10 @@ ${siteUrl}`;
       public_site_url: form.public_site_url.trim(),
       freight_per_km_brl: freightPerKm,
       freight_per_km_cents: Math.round(freightPerKm * 100),
-      store_postal_code: form.store_postal_code.replace(/\D/g, ''),
+      store_postal_code: sanitizedPostalCode,
+      current_origin_latitude: shouldUseCurrentLocation ? form.current_origin_latitude : null,
+      current_origin_longitude: shouldUseCurrentLocation ? form.current_origin_longitude : null,
+      current_origin_updated_at: shouldUseCurrentLocation ? form.current_origin_updated_at : null,
       store_latitude: null,
       store_longitude: null
     };
@@ -180,7 +209,13 @@ ${siteUrl}`;
           <input
             className="w-full rounded-xl border px-3 py-2"
             value={form.store_postal_code}
-            onChange={(e) => setForm({ ...form, store_postal_code: e.target.value })}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                store_postal_code: e.target.value,
+                delivery_origin_mode: 'store_postal_code'
+              }))
+            }
             placeholder="CEP da loja (fallback)"
           />
           <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
@@ -203,6 +238,9 @@ ${siteUrl}`;
             </label>
             <button className="btn-secondary mt-2" type="button" onClick={captureCurrentLocation}>
               {capturingLocation ? 'Capturando localização...' : 'Usar localização atual'}
+            </button>
+            <button className="btn-secondary mt-2 ml-2" type="button" onClick={resetDeliveryOrigin}>
+              Redefinir origem/endereço
             </button>
             {form.current_origin_latitude != null && form.current_origin_longitude != null && (
               <p className="mt-2">
