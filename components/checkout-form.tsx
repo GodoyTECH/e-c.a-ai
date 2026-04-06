@@ -99,31 +99,25 @@ export function CheckoutForm() {
         <h2 className="text-xl font-bold">Seu carrinho</h2>
         <div className="mt-4 space-y-3">
           {items.map((item) => (
-            <div key={item.lineId} className="flex items-center justify-between">
-              <div>
-                <p>{item.name}</p>
-                {item.toppings.length > 0 && <p className="text-xs text-slate-500">Acompanhamentos: {item.toppings.join(', ')}</p>}
+            <div key={item.lineId} className="rounded-xl border p-3">
+              <div className="flex items-center justify-between">
+                <p className="font-medium">{item.name}</p>
+                <div className="flex items-center gap-2">
+                  <button className="btn-secondary" onClick={() => removeItem(item.lineId)} type="button">-</button>
+                  <span>{item.quantity}</span>
+                  <button className="btn-secondary" onClick={() => addItem({ lineId: item.lineId, productId: item.productId, name: item.name, imageUrl: item.imageUrl, priceCents: item.priceCents, selectedSize: item.selectedSize, includedToppings: item.includedToppings, optionalToppings: item.optionalToppings, toppings: item.toppings })} type="button">+</button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button className="btn-secondary" onClick={() => removeItem(item.lineId)} type="button">-</button>
-                <span>{item.quantity}</span>
-                <button
-                  className="btn-secondary"
-                  onClick={() =>
-                    addItem({
-                      lineId: item.lineId,
-                      productId: item.productId,
-                      name: item.name,
-                      priceCents: item.priceCents,
-                      imageUrl: item.imageUrl,
-                      toppings: item.toppings
-                    })
-                  }
-                  type="button"
-                >
-                  +
-                </button>
-              </div>
+              <p className="mt-1 text-xs text-slate-500">Tamanho: {item.selectedSize.label} ({item.selectedSize.volumeMl}ml)</p>
+              {item.includedToppings.length > 0 && (
+                <p className="text-xs text-slate-500">Inclusos: {item.includedToppings.map((t) => t.name).join(', ')}</p>
+              )}
+              {item.optionalToppings.length > 0 && (
+                <p className="text-xs text-slate-500">
+                  Adicionais: {item.optionalToppings.map((t) => `${t.name} (+${currencyBRL(t.priceCents)})`).join(', ')}
+                </p>
+              )}
+              <p className="mt-1 text-sm font-semibold">Subtotal: {currencyBRL(item.priceCents * item.quantity)}</p>
             </div>
           ))}
         </div>
@@ -150,7 +144,6 @@ export function CheckoutForm() {
             ))}
           </div>
         </div>
-
 
         <div>
           <p className="mb-1 font-medium">Forma de pagamento</p>

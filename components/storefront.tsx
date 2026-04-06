@@ -4,13 +4,13 @@ import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Category, Product, Topping } from '@/lib/types';
+import { Category, Product, ProductSize, Topping } from '@/lib/types';
 import { currencyBRL } from '@/lib/utils';
 import { useCart } from './cart-context';
 
-function createLineId(productId: string, toppings: string[]) {
+function createLineId(productId: string, sizeId: string, toppings: string[]) {
   const normalized = [...toppings].sort().join('|');
-  return `${productId}::${normalized}`;
+  return `${productId}::${sizeId}::${normalized}`;
 }
 
 export function Storefront({
@@ -25,6 +25,7 @@ export function Storefront({
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedSizeId, setSelectedSizeId] = useState<string>('');
   const [selectedToppings, setSelectedToppings] = useState<string[]>([]);
   const [showBannerFallback, setShowBannerFallback] = useState(false);
   const { addItem, items, totalCents } = useCart();
@@ -34,30 +35,71 @@ export function Storefront({
     return products.filter((product) => product.category_id === selectedCategory);
   }, [products, selectedCategory]);
 
-  const activeToppings = toppings.filter((item) => item.active);
-
-  function toggleTopping(name: string) {
-    setSelectedToppings((prev) => (prev.includes(name) ? prev.filter((item) => item !== name) : [...prev, name]));
+  function toggleTopping(id: string) {
+    setSelectedToppings((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
   }
 
   function handleProductClick(product: Product) {
     setSelectedProduct(product);
     setSelectedToppings([]);
+    const activeSize = (product.sizes || []).find((size) => size.active);
+    setSelectedSizeId(activeSize?.id || '');
   }
 
+  const selectedSize = useMemo<ProductSize | null>(() => {
+    if (!selectedProduct) return null;
+    return (selectedProduct.sizes || []).find((size) => size.id === selectedSizeId) || null;
+  }, [selectedProduct, selectedSizeId]);
+
+  const optionalToppings = useMemo(() => {
+    if (!selectedProduct) return [];
+    return (selectedProduct.optional_toppings || []).filter((item) => item.active);
+  }, [selectedProduct]);
+
+  const includedToppings = useMemo(() => {
+    if (!selectedProduct) return [];
+    return selectedProduct.included_toppings || [];
+  }, [selectedProduct]);
+
+  const additionalTotal = optionalToppings
+    .filter((topping) => selectedToppings.includes(topping.topping_id))
+    .reduce((acc, topping) => acc + topping.price_cents, 0);
+
+  const selectedPrice = (selectedSize?.price_cents || selectedProduct?.price_cents || 0) + additionalTotal;
+
   function addSelectedToCart() {
-    if (!selectedProduct) return;
-    const lineId = createLineId(selectedProduct.id, selectedToppings);
+    if (!selectedProduct || !selectedSize) return;
+
+    const selectedOptionals = optionalToppings
+      .filter((item) => selectedToppings.includes(item.topping_id))
+      .map((item) => ({ toppingId: item.topping_id, name: item.name, priceCents: item.price_cents }));
+
+    const lineId = createLineId(
+      selectedProduct.id,
+      selectedSize.id,
+      selectedOptionals.map((item) => item.toppingId)
+    );
+
     addItem({
       lineId,
       productId: selectedProduct.id,
       name: selectedProduct.name,
       imageUrl: selectedProduct.main_image_url,
-      priceCents: selectedProduct.price_cents,
-      toppings: selectedToppings
+      priceCents: selectedPrice,
+      selectedSize: {
+        id: selectedSize.id,
+        label: selectedSize.label,
+        volumeMl: selectedSize.volume_ml,
+        priceCents: selectedSize.price_cents
+      },
+      includedToppings: includedToppings.map((item) => ({ toppingId: item.topping_id, name: item.name, priceCents: 0 })),
+      optionalToppings: selectedOptionals,
+      toppings: selectedOptionals.map((item) => item.name)
     });
+
     setSelectedProduct(null);
     setSelectedToppings([]);
+    setSelectedSizeId('');
   }
 
   function directCheckout() {
@@ -67,32 +109,27 @@ export function Storefront({
 
   return (
     <main className="mx-auto max-w-6xl p-4 md:p-8">
-      <section className="mb-6 overflow-hidden rounded-3xl shadow-xl shadow-purple-500/20">
-        <div className="relative h-44 md:h-56">
-          {showBannerFallback ? (
-            <div className="h-full w-full bg-gradient-to-r from-acai via-purple-500 to-fuchsia-500" />
-          ) : (
-            <Image
-              src="/banner.svg"
-              alt="Banner Refrescando"
-              fill
-              priority
-              className="object-cover"
-              onError={() => setShowBannerFallback(true)}
-            />
-          )}
-          <div className="absolute inset-0 bg-acai/60" />
-          <div className="absolute inset-0 p-6 text-white">
-            <h1 className="text-3xl font-bold">Refrescando</h1>
-            <p className="mt-2 text-sm opacity-90">Monte seu pedido em segundos. Entrega rápida e sabor intenso.</p>
+      <section className="mb-6 overflow-hidden rounded-3xl border border-white/30 bg-gradient-to-br from-acai via-purple-700 to-fuchsia-700 shadow-xl shadow-purple-500/20">
+        <div className="relative">
+          <div className="absolute inset-0 opacity-40">
+            {showBannerFallback ? (
+              <div className="h-full w-full bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.25),transparent_50%)]" />
+            ) : (
+              <Image src="/banner.svg" alt="Banner Refrescando" fill priority className="object-cover" onError={() => setShowBannerFallback(true)} />
+            )}
+          </div>
+          <div className="relative z-10 grid gap-6 px-6 py-8 text-white md:px-10 md:py-10">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">Açaí premium delivery</p>
+            <h1 className="max-w-2xl text-4xl font-black leading-[1.05] tracking-tight md:text-5xl">Refrescando</h1>
+            <p className="max-w-xl text-sm leading-relaxed text-white/90 md:text-base">
+              Monte seu pedido com tamanhos, inclusos e adicionais de forma clara. Experiência rápida no celular e fechamento direto no WhatsApp.
+            </p>
           </div>
         </div>
       </section>
 
       <section className="mb-6 flex gap-2 overflow-x-auto">
-        <button className="btn-secondary" onClick={() => setSelectedCategory('all')}>
-          Todos
-        </button>
+        <button className="btn-secondary" onClick={() => setSelectedCategory('all')}>Todos</button>
         {categories.map((cat) => (
           <button key={cat.id} className="btn-secondary" onClick={() => setSelectedCategory(cat.id)}>
             {cat.name}
@@ -101,49 +138,80 @@ export function Storefront({
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((product) => (
-          <article key={product.id} className="card glass-card border border-white/40">
-            <div className="mb-3 h-44 rounded-xl bg-slate-100 bg-cover bg-center" style={{ backgroundImage: `url(${product.main_image_url})` }} />
-            <h3 className="font-semibold">{product.name}</h3>
-            <p className="mt-1 text-sm text-slate-600">{product.description}</p>
-            <div className="mt-3 flex items-center justify-between">
-              <span className="text-lg font-bold text-acai">{currencyBRL(product.price_cents)}</span>
-              <button className="btn-primary" onClick={() => handleProductClick(product)}>
-                Adicionar
-              </button>
-            </div>
-          </article>
-        ))}
+        {filtered.map((product) => {
+          const activeSizes = (product.sizes || []).filter((item) => item.active);
+          const minimumPrice = activeSizes.length
+            ? Math.min(...activeSizes.map((item) => item.price_cents))
+            : product.price_cents;
+
+          return (
+            <article key={product.id} className="card glass-card border border-white/40">
+              <div className="mb-3 h-44 rounded-xl bg-slate-100 bg-cover bg-center" style={{ backgroundImage: `url(${product.main_image_url})` }} />
+              <h3 className="font-semibold">{product.name}</h3>
+              <p className="mt-1 text-sm text-slate-600">{product.description}</p>
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-lg font-bold text-acai">A partir de {currencyBRL(minimumPrice)}</span>
+                <button className="btn-primary" onClick={() => handleProductClick(product)}>Adicionar</button>
+              </div>
+            </article>
+          );
+        })}
       </section>
 
       {selectedProduct && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl">
-            <h2 className="text-lg font-bold">Acompanhamentos</h2>
-            <p className="text-sm text-slate-600">Selecione os acompanhamentos para {selectedProduct.name}.</p>
-            <div className="mt-3 grid grid-cols-1 gap-2">
-              {activeToppings.map((topping) => (
-                <label key={topping.id} className="flex items-center gap-2 rounded-xl border px-3 py-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedToppings.includes(topping.name)}
-                    onChange={() => toggleTopping(topping.name)}
-                  />
-                  {topping.name}
-                </label>
-              ))}
-              {activeToppings.length === 0 && <p className="text-sm text-slate-500">Nenhum acompanhamento ativo no momento.</p>}
-            </div>
+          <div className="max-h-[95vh] w-full max-w-md overflow-auto rounded-2xl bg-white p-4 shadow-xl">
+            <h2 className="text-lg font-bold">Personalizar pedido</h2>
+            <p className="text-sm text-slate-600">{selectedProduct.name}</p>
+
+            <section className="mt-4 space-y-2 rounded-xl border p-3">
+              <h3 className="font-semibold">1) Escolha o tamanho</h3>
+              {(selectedProduct.sizes || [])
+                .filter((size) => size.active)
+                .map((size) => (
+                  <label key={size.id} className="flex cursor-pointer items-center justify-between rounded-xl border px-3 py-2">
+                    <div>
+                      <p className="font-medium">{size.label}</p>
+                      <p className="text-xs text-slate-500">{size.volume_ml}ml</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-semibold text-acai">{currencyBRL(size.price_cents)}</span>
+                      <input type="radio" name="size" checked={selectedSizeId === size.id} onChange={() => setSelectedSizeId(size.id)} />
+                    </div>
+                  </label>
+                ))}
+            </section>
+
+            <section className="mt-3 space-y-2 rounded-xl border p-3">
+              <h3 className="font-semibold">2) Inclusos no produto</h3>
+              {includedToppings.length > 0 ? (
+                <p className="text-sm text-slate-600">{includedToppings.map((item) => item.name).join(', ')}</p>
+              ) : (
+                <p className="text-sm text-slate-500">Sem inclusos padrão.</p>
+              )}
+            </section>
+
+            <section className="mt-3 space-y-2 rounded-xl border p-3">
+              <h3 className="font-semibold">3) Adicionais opcionais</h3>
+              <div className="grid grid-cols-1 gap-2">
+                {optionalToppings.map((topping) => (
+                  <label key={topping.topping_id} className="flex items-center justify-between rounded-xl border px-3 py-2">
+                    <span>{topping.name}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-semibold text-acai">+ {currencyBRL(topping.price_cents)}</span>
+                      <input type="checkbox" checked={selectedToppings.includes(topping.topping_id)} onChange={() => toggleTopping(topping.topping_id)} />
+                    </div>
+                  </label>
+                ))}
+                {optionalToppings.length === 0 && <p className="text-sm text-slate-500">Sem adicionais ativos no momento.</p>}
+              </div>
+            </section>
+
+            <p className="mt-4 text-lg font-bold">Subtotal do item: {currencyBRL(selectedPrice)}</p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <button className="btn-primary" onClick={addSelectedToCart}>
-                Adicionar ao carrinho
-              </button>
-              <button className="btn-secondary" onClick={directCheckout}>
-                Finalizar direto
-              </button>
-              <button className="btn-secondary" onClick={() => setSelectedProduct(null)}>
-                Cancelar
-              </button>
+              <button className="btn-primary" onClick={addSelectedToCart} disabled={!selectedSize}>Adicionar ao carrinho</button>
+              <button className="btn-secondary" onClick={directCheckout} disabled={!selectedSize}>Finalizar direto</button>
+              <button className="btn-secondary" onClick={() => setSelectedProduct(null)}>Cancelar</button>
             </div>
           </div>
         </div>

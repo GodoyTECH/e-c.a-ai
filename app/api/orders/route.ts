@@ -12,10 +12,22 @@ const schema = z.object({
   items: z
     .array(
       z.object({
-        productId: z.string().uuid(),
+        productId: z.string().min(1),
         name: z.string(),
         priceCents: z.number().int().nonnegative(),
         quantity: z.number().int().positive(),
+        size: z.object({
+          id: z.string(),
+          label: z.string(),
+          volumeMl: z.number().int().positive(),
+          priceCents: z.number().int().nonnegative()
+        }),
+        includedToppings: z.array(
+          z.object({ toppingId: z.string(), name: z.string(), priceCents: z.number().int().nonnegative() })
+        ),
+        optionalToppings: z.array(
+          z.object({ toppingId: z.string(), name: z.string(), priceCents: z.number().int().nonnegative() })
+        ),
         toppings: z.array(z.string()).default([])
       })
     )

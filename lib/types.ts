@@ -5,6 +5,32 @@ export type Category = {
   active: boolean;
 };
 
+export type ProductSize = {
+  id: string;
+  label: string;
+  volume_ml: number;
+  price_cents: number;
+  active: boolean;
+  sort_order: number;
+};
+
+export type Topping = {
+  id: string;
+  name: string;
+  price_cents: number;
+  active: boolean;
+  sort_order: number;
+  archived: boolean;
+};
+
+export type ProductToppingOption = {
+  topping_id: string;
+  name: string;
+  price_cents: number;
+  active: boolean;
+  sort_order: number;
+};
+
 export type Product = {
   id: string;
   name: string;
@@ -16,22 +42,33 @@ export type Product = {
   main_image_url: string | null;
   category_name?: string;
   images?: string[];
+  sizes?: ProductSize[];
+  included_toppings?: ProductToppingOption[];
+  optional_toppings?: ProductToppingOption[];
+};
+
+export type CartToppingSelection = {
+  toppingId: string;
+  name: string;
+  priceCents: number;
 };
 
 export type CartItem = {
   lineId: string;
   productId: string;
   name: string;
-  priceCents: number;
   imageUrl?: string | null;
   quantity: number;
+  priceCents: number;
+  selectedSize: {
+    id: string;
+    label: string;
+    volumeMl: number;
+    priceCents: number;
+  };
+  includedToppings: CartToppingSelection[];
+  optionalToppings: CartToppingSelection[];
   toppings: string[];
-};
-
-export type Topping = {
-  id: string;
-  name: string;
-  active: boolean;
 };
 
 export type PaymentMethod = 'pix' | 'credit_card' | 'debit_card';
