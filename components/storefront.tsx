@@ -8,9 +8,20 @@ import { Category, Product, ProductSize, Topping } from '@/lib/types';
 import { currencyBRL } from '@/lib/utils';
 import { useCart } from './cart-context';
 
-function createLineId(productId: string, sizeId: string, toppings: string[]) {
-  const normalized = [...toppings].sort().join('|');
-  return `${productId}::${sizeId}::${normalized}`;
+function createLineId(
+  productId: string,
+  sizeId: string,
+  optionalQuantities: Record<string, number>,
+  removedIncludedIds: string[]
+) {
+  const optionalNormalized = Object.entries(optionalQuantities)
+    .filter(([, quantity]) => quantity > 0)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([toppingId, quantity]) => `${toppingId}:${quantity}`)
+    .join('|');
+
+  const removedIncludedNormalized = [...removedIncludedIds].sort().join('|');
+  return `${productId}::${sizeId}::opt=${optionalNormalized}::removed=${removedIncludedNormalized}`;
 }
 
 export function Storefront({
@@ -26,7 +37,8 @@ export function Storefront({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedSizeId, setSelectedSizeId] = useState<string>('');
-  const [selectedToppings, setSelectedToppings] = useState<string[]>([]);
+  const [optionalQuantities, setOptionalQuantities] = useState<Record<string, number>>({});
+  const [removedIncludedIds, setRemovedIncludedIds] = useState<string[]>([]);
   const [showBannerFallback, setShowBannerFallback] = useState(false);
   const { addItem, items, totalCents } = useCart();
 
@@ -35,13 +47,33 @@ export function Storefront({
     return products.filter((product) => product.category_id === selectedCategory);
   }, [products, selectedCategory]);
 
-  function toggleTopping(id: string) {
-    setSelectedToppings((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+  function updateOptionalQuantity(id: string, nextQuantity: number) {
+    setOptionalQuantities((prev) => ({
+      ...prev,
+      [id]: Math.max(0, nextQuantity)
+    }));
+  }
+
+  function toggleIncludedTopping(id: string) {
+    setRemovedIncludedIds((prev) => {
+      const willRemove = !prev.includes(id);
+      const next = willRemove ? [...prev, id] : prev.filter((item) => item !== id);
+
+      if (willRemove) {
+        setOptionalQuantities((current) => ({
+          ...current,
+          [id]: 0
+        }));
+      }
+
+      return next;
+    });
   }
 
   function handleProductClick(product: Product) {
     setSelectedProduct(product);
-    setSelectedToppings([]);
+    setOptionalQuantities({});
+    setRemovedIncludedIds([]);
     const activeSize = (product.sizes || []).find((size) => size.active);
     setSelectedSizeId(activeSize?.id || '');
   }
@@ -61,23 +93,34 @@ export function Storefront({
     return selectedProduct.included_toppings || [];
   }, [selectedProduct]);
 
-  const additionalTotal = optionalToppings
-    .filter((topping) => selectedToppings.includes(topping.topping_id))
-    .reduce((acc, topping) => acc + topping.price_cents, 0);
+  const additionalTotal = optionalToppings.reduce((acc, topping) => {
+    const quantity = optionalQuantities[topping.topping_id] || 0;
+    return acc + topping.price_cents * quantity;
+  }, 0);
 
   const selectedPrice = (selectedSize?.price_cents || selectedProduct?.price_cents || 0) + additionalTotal;
 
   function addSelectedToCart() {
     if (!selectedProduct || !selectedSize) return;
 
-    const selectedOptionals = optionalToppings
-      .filter((item) => selectedToppings.includes(item.topping_id))
-      .map((item) => ({ toppingId: item.topping_id, name: item.name, priceCents: item.price_cents }));
+    const selectedOptionals = optionalToppings.flatMap((item) => {
+      const quantity = optionalQuantities[item.topping_id] || 0;
+      return Array.from({ length: quantity }, () => ({
+        toppingId: item.topping_id,
+        name: item.name,
+        priceCents: item.price_cents
+      }));
+    });
+
+    const selectedIncluded = includedToppings
+      .filter((item) => !removedIncludedIds.includes(item.topping_id))
+      .map((item) => ({ toppingId: item.topping_id, name: item.name, priceCents: 0 }));
 
     const lineId = createLineId(
       selectedProduct.id,
       selectedSize.id,
-      selectedOptionals.map((item) => item.toppingId)
+      optionalQuantities,
+      removedIncludedIds
     );
 
     addItem({
@@ -92,13 +135,14 @@ export function Storefront({
         volumeMl: selectedSize.volume_ml,
         priceCents: selectedSize.price_cents
       },
-      includedToppings: includedToppings.map((item) => ({ toppingId: item.topping_id, name: item.name, priceCents: 0 })),
+      includedToppings: selectedIncluded,
       optionalToppings: selectedOptionals,
       toppings: selectedOptionals.map((item) => item.name)
     });
 
     setSelectedProduct(null);
-    setSelectedToppings([]);
+    setOptionalQuantities({});
+    setRemovedIncludedIds([]);
     setSelectedSizeId('');
   }
 
@@ -198,7 +242,20 @@ export function Storefront({
             <section className="mt-3 space-y-2 rounded-xl border p-3">
               <h3 className="font-semibold">2) Inclusos no produto</h3>
               {includedToppings.length > 0 ? (
-                <p className="text-sm text-slate-600">{includedToppings.map((item) => item.name).join(', ')}</p>
+                <div className="space-y-2">
+                  {includedToppings.map((item) => {
+                    const removed = removedIncludedIds.includes(item.topping_id);
+
+                    return (
+                      <div key={item.topping_id} className="flex items-center justify-between rounded-xl border px-3 py-2">
+                        <span className={removed ? 'text-sm text-slate-400 line-through' : 'text-sm text-slate-700'}>{item.name}</span>
+                        <button type="button" className="btn-secondary" onClick={() => toggleIncludedTopping(item.topping_id)}>
+                          {removed ? 'Restaurar' : 'Excluir'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               ) : (
                 <p className="text-sm text-slate-500">Sem inclusos padrão.</p>
               )}
@@ -208,13 +265,29 @@ export function Storefront({
               <h3 className="font-semibold">3) Adicionais opcionais</h3>
               <div className="grid grid-cols-1 gap-2">
                 {optionalToppings.map((topping) => (
-                  <label key={topping.topping_id} className="flex items-center justify-between rounded-xl border px-3 py-2">
+                  <div key={topping.topping_id} className="flex items-center justify-between rounded-xl border px-3 py-2">
                     <span>{topping.name}</span>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold text-acai">+ {currencyBRL(topping.price_cents)}</span>
-                      <input type="checkbox" checked={selectedToppings.includes(topping.topping_id)} onChange={() => toggleTopping(topping.topping_id)} />
+                      <button
+                        type="button"
+                        className="btn-secondary px-3 py-1"
+                        onClick={() => updateOptionalQuantity(topping.topping_id, (optionalQuantities[topping.topping_id] || 0) - 1)}
+                        disabled={(optionalQuantities[topping.topping_id] || 0) <= 0 || removedIncludedIds.includes(topping.topping_id)}
+                      >
+                        -
+                      </button>
+                      <span className="w-6 text-center text-sm font-medium">{optionalQuantities[topping.topping_id] || 0}</span>
+                      <button
+                        type="button"
+                        className="btn-secondary px-3 py-1"
+                        onClick={() => updateOptionalQuantity(topping.topping_id, (optionalQuantities[topping.topping_id] || 0) + 1)}
+                        disabled={removedIncludedIds.includes(topping.topping_id)}
+                      >
+                        +
+                      </button>
                     </div>
-                  </label>
+                  </div>
                 ))}
                 {optionalToppings.length === 0 && <p className="text-sm text-slate-500">Sem adicionais ativos no momento.</p>}
               </div>
