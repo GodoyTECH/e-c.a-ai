@@ -48,6 +48,16 @@ export default function AdminToppingsPage() {
     await load();
   }
 
+  async function removeTopping(item: Topping) {
+    if (!window.confirm(`Excluir condimento ${item.name}?`)) return;
+    setLoading(true);
+    const res = await fetch(`/api/admin/toppings?id=${item.id}`, { method: 'DELETE' });
+    setLoading(false);
+    if (!res.ok) return alert('Falha ao excluir condimento.');
+    alert('Condimento excluído.');
+    await load();
+  }
+
   async function addNew() {
     setLoading(true);
     await fetch('/api/admin/toppings', {
@@ -113,7 +123,10 @@ export default function AdminToppingsPage() {
                 }
               />
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={topping.active} onChange={(event) => setToppings((prev) => prev.map((item) => (item.id === topping.id ? { ...item, active: event.target.checked } : item)))} />Ativo</label>
-              <button type="button" className="btn-secondary" onClick={() => save(toppings[index])}>Salvar</button>
+              <div className="flex gap-2">
+                <button type="button" className="btn-secondary" onClick={() => save(toppings[index])}>Salvar</button>
+                <button type="button" className="btn-secondary" onClick={() => removeTopping(topping)}>Excluir</button>
+              </div>
             </div>
           ))}
         </div>

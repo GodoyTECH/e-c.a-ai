@@ -206,3 +206,10 @@ ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS current_origin_latitude DOUB
 ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS current_origin_longitude DOUBLE PRECISION;
 ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS current_origin_updated_at TIMESTAMPTZ;
 UPDATE store_settings SET freight_per_km_brl = COALESCE(freight_per_km_brl, freight_per_km_cents / 100.0, 0);
+
+
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS store_street TEXT;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS store_neighborhood TEXT;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS store_city TEXT;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS store_state TEXT;
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS store_address_number TEXT;
