@@ -14,6 +14,11 @@ type SettingsForm = {
   free_shipping_enabled: boolean;
   freight_per_km_brl: string;
   store_postal_code: string;
+  store_street: string;
+  store_neighborhood: string;
+  store_city: string;
+  store_state: string;
+  store_address_number: string;
   delivery_origin_mode: 'store_postal_code' | 'current_location';
   current_origin_latitude: number | null;
   current_origin_longitude: number | null;
@@ -36,6 +41,11 @@ const defaultForm: SettingsForm = {
   delivery_origin_mode: 'store_postal_code',
   current_origin_latitude: null,
   current_origin_longitude: null,
+  store_street: '',
+  store_neighborhood: '',
+  store_city: '',
+  store_state: '',
+  store_address_number: '',
   current_origin_updated_at: null
 };
 
@@ -47,11 +57,20 @@ function parseFreightValue(value: string) {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
+function parseNullableCoordinate(value: unknown) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  if (Math.abs(parsed) > 180) return null;
+  return parsed;
+}
+
 export default function AdminSettingsPage() {
   const [form, setForm] = useState<SettingsForm>(defaultForm);
   const [loading, setLoading] = useState(false);
   const [capturingLocation, setCapturingLocation] = useState(false);
   const [marketingMessage, setMarketingMessage] = useState('');
+  const [lookupLoading, setLookupLoading] = useState(false);
 
   const defaultMarketingMessage = useMemo(() => {
     const siteUrl = form.public_site_url?.trim() || DEFAULT_PUBLIC_SITE_URL;
@@ -61,6 +80,11 @@ Temos opções deliciosas com acompanhamentos incríveis e entrega rápida! 😍
 Faça seu pedido agora pelo cardápio digital:
 ${siteUrl}`;
   }, [form.public_site_url]);
+
+  const hasCurrentCoordinates =
+    form.current_origin_latitude != null &&
+    form.current_origin_longitude != null &&
+    !(form.current_origin_latitude === 0 && form.current_origin_longitude === 0);
 
   async function loadSettings() {
     const res = await fetch('/api/admin/settings', { cache: 'no-store' });
@@ -85,9 +109,14 @@ ${siteUrl}`;
       free_shipping_enabled: typeof data.free_shipping_enabled === 'boolean' ? data.free_shipping_enabled : true,
       freight_per_km_brl: Number(data.freight_per_km_brl ?? Number(data.freight_per_km_cents || 0) / 100).toFixed(2).replace('.', ','),
       store_postal_code: data.store_postal_code || '',
+      store_street: data.store_street || '',
+      store_neighborhood: data.store_neighborhood || '',
+      store_city: data.store_city || '',
+      store_state: data.store_state || '',
+      store_address_number: data.store_address_number || '',
       delivery_origin_mode: data.delivery_origin_mode === 'current_location' ? 'current_location' : 'store_postal_code',
-      current_origin_latitude: Number.isFinite(Number(data.current_origin_latitude)) ? Number(data.current_origin_latitude) : null,
-      current_origin_longitude: Number.isFinite(Number(data.current_origin_longitude)) ? Number(data.current_origin_longitude) : null,
+      current_origin_latitude: parseNullableCoordinate(data.current_origin_latitude),
+      current_origin_longitude: parseNullableCoordinate(data.current_origin_longitude),
       current_origin_updated_at: data.current_origin_updated_at || null
     }));
   }
@@ -133,12 +162,46 @@ ${siteUrl}`;
       ...prev,
       delivery_origin_mode: 'store_postal_code',
       store_postal_code: '',
+      store_street: '',
+      store_neighborhood: '',
+      store_city: '',
+      store_state: '',
+      store_address_number: '',
       current_origin_latitude: null,
       current_origin_longitude: null,
       current_origin_updated_at: null
     }));
   }
 
+
+
+  async function lookupStorePostalCode() {
+    const postalCode = form.store_postal_code.replace(/\D/g, '');
+    if (postalCode.length !== 8) return;
+
+    setLookupLoading(true);
+    const res = await fetch('/api/address/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ postalCode })
+    });
+    setLookupLoading(false);
+
+    if (!res.ok) {
+      alert('CEP da loja inválido ou não encontrado.');
+      return;
+    }
+
+    const data = await res.json();
+    setForm((prev) => ({
+      ...prev,
+      store_postal_code: data.cep || postalCode,
+      store_street: data.street || '',
+      store_neighborhood: data.neighborhood || '',
+      store_city: data.city || '',
+      store_state: data.state || ''
+    }));
+  }
 
   async function shareMarketingMessage() {
     const text = marketingMessage.trim() || defaultMarketingMessage;
@@ -171,8 +234,6 @@ ${siteUrl}`;
     const freightPerKm = parseFreightValue(form.freight_per_km_brl);
     const sanitizedPostalCode = form.store_postal_code.replace(/\D/g, '');
     const shouldUseCurrentLocation = form.delivery_origin_mode === 'current_location';
-    const hasCurrentCoordinates = form.current_origin_latitude != null && form.current_origin_longitude != null;
-
     if (shouldUseCurrentLocation && !hasCurrentCoordinates) {
       setLoading(false);
       alert('Capture a localização atual antes de salvar quando a origem selecionada for localização atual.');
@@ -185,6 +246,12 @@ ${siteUrl}`;
       return;
     }
 
+    if (!shouldUseCurrentLocation && form.store_street && !form.store_address_number.trim()) {
+      setLoading(false);
+      alert('Informe o número para validar o endereço completo da loja.');
+      return;
+    }
+
     const payload = {
       ...form,
       owner_whatsapp_number: form.owner_whatsapp_number.replace(/\D/g, ''),
@@ -192,6 +259,11 @@ ${siteUrl}`;
       freight_per_km_brl: freightPerKm,
       freight_per_km_cents: Math.round(freightPerKm * 100),
       store_postal_code: sanitizedPostalCode,
+      store_street: form.store_street.trim(),
+      store_neighborhood: form.store_neighborhood.trim(),
+      store_city: form.store_city.trim(),
+      store_state: form.store_state.trim(),
+      store_address_number: form.store_address_number.trim(),
       current_origin_latitude: shouldUseCurrentLocation ? form.current_origin_latitude : null,
       current_origin_longitude: shouldUseCurrentLocation ? form.current_origin_longitude : null,
       current_origin_updated_at: shouldUseCurrentLocation ? form.current_origin_updated_at : null,
@@ -233,18 +305,30 @@ ${siteUrl}`;
           <label className="flex items-center gap-2"><input type="checkbox" checked={form.freight_enabled} onChange={(e) => setForm({ ...form, freight_enabled: e.target.checked })} /> Frete ativo</label>
           <label className="flex items-center gap-2"><input type="checkbox" checked={form.free_shipping_enabled} onChange={(e) => setForm({ ...form, free_shipping_enabled: e.target.checked })} /> Frete grátis</label>
           <input className="w-full rounded-xl border px-3 py-2" value={form.freight_per_km_brl} onChange={(e) => setForm({ ...form, freight_per_km_brl: e.target.value })} placeholder="Valor por km (R$), ex: 0,20 ou 1.75" />
-          <input
-            className="w-full rounded-xl border px-3 py-2"
-            value={form.store_postal_code}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                store_postal_code: e.target.value,
-                delivery_origin_mode: 'store_postal_code'
-              }))
-            }
-            placeholder="CEP da loja (fallback)"
-          />
+          <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+            <input
+              className="w-full rounded-xl border px-3 py-2"
+              value={form.store_postal_code}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  store_postal_code: e.target.value,
+                  delivery_origin_mode: 'store_postal_code'
+                }))
+              }
+              onBlur={lookupStorePostalCode}
+              placeholder="CEP da loja"
+            />
+            <button className="btn-secondary" type="button" onClick={lookupStorePostalCode}>
+              {lookupLoading ? 'Buscando...' : 'Buscar CEP'}
+            </button>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <input className="w-full rounded-xl border px-3 py-2" value={form.store_street} readOnly placeholder="Rua / Logradouro" />
+            <input className="w-full rounded-xl border px-3 py-2" value={form.store_address_number} onChange={(e) => setForm({ ...form, store_address_number: e.target.value })} placeholder="Número" />
+            <input className="w-full rounded-xl border px-3 py-2" value={form.store_neighborhood} readOnly placeholder="Bairro" />
+            <input className="w-full rounded-xl border px-3 py-2" value={`${form.store_city}${form.store_state ? ` - ${form.store_state}` : ''}`} readOnly placeholder="Cidade / Estado" />
+          </div>
           <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
             <p className="font-semibold text-slate-700">Origem da entrega</p>
             <label className="mt-2 flex items-center gap-2">
@@ -276,7 +360,13 @@ ${siteUrl}`;
               </p>
             )}
           </div>
-          <p className="text-xs text-slate-500">Sem localização atual e sem CEP da loja, o sistema aplica fallback seguro de frete R$ 0,00.</p>
+          <p className="text-xs text-slate-500">
+            {!form.store_postal_code.replace(/\D/g, '') && !hasCurrentCoordinates
+              ? 'Sem localização atual e sem CEP da loja, o sistema aplica fallback seguro de frete R$ 0,00.'
+              : form.delivery_origin_mode === 'store_postal_code'
+                ? 'Origem configurada por CEP da loja.'
+                : 'Origem configurada por localização atual do entregador.'}
+          </p>
         </div>
 
         <button className="btn-primary" disabled={loading} onClick={onSave}>{loading ? 'Salvando...' : 'Salvar configurações'}</button>

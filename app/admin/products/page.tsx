@@ -186,6 +186,13 @@ export default function AdminProductsPage() {
     await load();
   }
 
+  async function removeProduct(product: Product) {
+    if (!window.confirm(`Excluir produto ${product.name}?`)) return;
+    const response = await fetch(`/api/admin/products?id=${product.id}`, { method: 'DELETE' });
+    if (!response.ok) return setError('Não foi possível excluir o produto.');
+    await load();
+  }
+
   function startEditProduct(product: Product) {
     setEditingProductId(product.id);
     setName(product.name);
@@ -296,6 +303,7 @@ export default function AdminProductsPage() {
             <p className="mt-1 text-sm">Adicionais: {(product.optional_toppings || []).map((item) => `${item.name} (+${currencyBRL(item.price_cents)})`).join(', ') || 'Nenhum'}</p>
             <div className="mt-3 flex gap-2">
               <button className="btn-secondary" onClick={() => startEditProduct(product)}>Editar</button>
+              <button className="btn-secondary" onClick={() => removeProduct(product)}>Excluir</button>
             </div>
           </article>
         ))}

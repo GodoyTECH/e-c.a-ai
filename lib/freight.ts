@@ -22,6 +22,11 @@ type FreightSettings = {
   freight_per_km_cents?: number;
   freight_per_km_brl?: number;
   store_postal_code?: string | null;
+  store_street?: string | null;
+  store_neighborhood?: string | null;
+  store_city?: string | null;
+  store_state?: string | null;
+  store_address_number?: string | null;
   delivery_origin_mode?: 'store_postal_code' | 'current_location';
   current_origin_latitude?: number | null;
   current_origin_longitude?: number | null;
@@ -150,10 +155,14 @@ async function geocodeByQuery(query: string) {
 }
 
 export async function resolveFreightOrigin(settings: FreightSettings) {
+  const hasCoordinates =
+    settings.current_origin_latitude != null &&
+    settings.current_origin_longitude != null &&
+    !(Number(settings.current_origin_latitude) === 0 && Number(settings.current_origin_longitude) === 0);
+
   const hasCurrentOrigin =
     settings.delivery_origin_mode === 'current_location' &&
-    settings.current_origin_latitude != null &&
-    settings.current_origin_longitude != null;
+    hasCoordinates;
 
   if (hasCurrentOrigin) {
     return {
@@ -164,6 +173,19 @@ export async function resolveFreightOrigin(settings: FreightSettings) {
 
   const storePostalCode = sanitizePostalCode(settings.store_postal_code);
   if (!storePostalCode) return null;
+
+  const street = settings.store_street?.trim();
+  const number = settings.store_address_number?.trim();
+  const city = settings.store_city?.trim();
+  const state = settings.store_state?.trim();
+  const neighborhood = settings.store_neighborhood?.trim();
+
+  if (street && number) {
+    const byAddress = await geocodeByQuery(
+      `${street}, ${number}${neighborhood ? `, ${neighborhood}` : ''}${city ? `, ${city}` : ''}${state ? `-${state}` : ''}, ${storePostalCode}, Brasil`
+    );
+    if (byAddress) return byAddress;
+  }
 
   return geocodeByQuery(`${storePostalCode}, Brasil`);
 }

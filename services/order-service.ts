@@ -279,3 +279,12 @@ export async function updateOrderStatus(orderId: string, status: 'confirmed' | '
   const db = getDb();
   await db.query('UPDATE orders SET status=$1, updated_at=NOW() WHERE id=$2', [status, orderId]);
 }
+
+
+export async function deleteOrder(orderId: string) {
+  if (!process.env.DATABASE_URL) return;
+
+  await ensureDbSchema();
+  const db = getDb();
+  await db.query('DELETE FROM orders WHERE id=$1', [orderId]);
+}

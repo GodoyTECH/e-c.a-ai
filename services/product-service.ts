@@ -186,7 +186,7 @@ export async function listStoreData() {
        ORDER BY p.featured DESC, p.created_at DESC`
     );
     const settingsRes = await db.query(
-      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, freight_per_km_brl, store_latitude, store_longitude, store_postal_code, delivery_origin_mode, current_origin_latitude, current_origin_longitude, current_origin_updated_at FROM store_settings WHERE id = 1'
+      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, freight_per_km_brl, store_latitude, store_longitude, store_postal_code, store_street, store_neighborhood, store_city, store_state, store_address_number, delivery_origin_mode, current_origin_latitude, current_origin_longitude, current_origin_updated_at FROM store_settings WHERE id = 1'
     );
     const toppingsRes = await db.query(
       'SELECT id, name, price_cents, active, sort_order, archived FROM acai_toppings WHERE archived = false ORDER BY sort_order ASC, name ASC'
@@ -373,7 +373,7 @@ export async function getStoreSettings() {
     await ensureDbSchema();
     const db = getDb();
     const res = await db.query(
-      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, freight_per_km_brl, store_latitude, store_longitude, store_postal_code, delivery_origin_mode, current_origin_latitude, current_origin_longitude, current_origin_updated_at FROM store_settings WHERE id=1'
+      'SELECT store_name, owner_whatsapp_number, allow_delivery, allow_pickup, default_order_message, public_site_url, freight_enabled, free_shipping_enabled, freight_per_km_cents, freight_per_km_brl, store_latitude, store_longitude, store_postal_code, store_street, store_neighborhood, store_city, store_state, store_address_number, delivery_origin_mode, current_origin_latitude, current_origin_longitude, current_origin_updated_at FROM store_settings WHERE id=1'
     );
     return res.rows[0] as StoreSettings;
   } catch (error) {
@@ -402,13 +402,18 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       store_latitude,
       store_longitude,
       store_postal_code,
+      store_street,
+      store_neighborhood,
+      store_city,
+      store_state,
+      store_address_number,
       delivery_origin_mode,
       current_origin_latitude,
       current_origin_longitude,
       current_origin_updated_at,
       updated_at
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW())
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,NOW())
     ON CONFLICT (id) DO UPDATE SET
       store_name = EXCLUDED.store_name,
       owner_whatsapp_number = EXCLUDED.owner_whatsapp_number,
@@ -423,6 +428,11 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       store_latitude = EXCLUDED.store_latitude,
       store_longitude = EXCLUDED.store_longitude,
       store_postal_code = EXCLUDED.store_postal_code,
+      store_street = EXCLUDED.store_street,
+      store_neighborhood = EXCLUDED.store_neighborhood,
+      store_city = EXCLUDED.store_city,
+      store_state = EXCLUDED.store_state,
+      store_address_number = EXCLUDED.store_address_number,
       delivery_origin_mode = EXCLUDED.delivery_origin_mode,
       current_origin_latitude = EXCLUDED.current_origin_latitude,
       current_origin_longitude = EXCLUDED.current_origin_longitude,
@@ -443,6 +453,11 @@ export async function updateStoreSettings(input: Partial<StoreSettings>) {
       Number.isFinite(Number(input.store_latitude)) ? Number(input.store_latitude) : null,
       Number.isFinite(Number(input.store_longitude)) ? Number(input.store_longitude) : null,
       (input.store_postal_code || '').replace(/\D/g, '') || null,
+      input.store_street?.trim() || null,
+      input.store_neighborhood?.trim() || null,
+      input.store_city?.trim() || null,
+      input.store_state?.trim() || null,
+      input.store_address_number?.trim() || null,
       input.delivery_origin_mode === 'current_location' ? 'current_location' : 'store_postal_code',
       Number.isFinite(Number(input.current_origin_latitude)) ? Number(input.current_origin_latitude) : null,
       Number.isFinite(Number(input.current_origin_longitude)) ? Number(input.current_origin_longitude) : null,
@@ -522,4 +537,11 @@ export async function upsertTopping(input: {
   );
 
   return inserted.rows[0].id as string;
+}
+
+
+export async function deleteTopping(id: string) {
+  await ensureDbSchema();
+  const db = getDb();
+  await db.query('UPDATE acai_toppings SET archived = true, active = false WHERE id = $1', [id]);
 }
