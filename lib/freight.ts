@@ -227,6 +227,11 @@ export async function resolveDestinationCoordinates(destination: FreightDestinat
 
   return null;
 }
+    if (fromPostalCode) return fromPostalCode;
+  }
+
+  return null;
+}
 
 export async function estimateFreightFromInput(settings: FreightSettings, destination: FreightDestination): Promise<FreightQuoteResult> {
   if (!settings.freight_enabled || settings.free_shipping_enabled) {
