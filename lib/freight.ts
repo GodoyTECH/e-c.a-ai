@@ -155,10 +155,14 @@ async function geocodeByQuery(query: string) {
 }
 
 export async function resolveFreightOrigin(settings: FreightSettings) {
+  const hasCoordinates =
+    settings.current_origin_latitude != null &&
+    settings.current_origin_longitude != null &&
+    !(Number(settings.current_origin_latitude) === 0 && Number(settings.current_origin_longitude) === 0);
+
   const hasCurrentOrigin =
     settings.delivery_origin_mode === 'current_location' &&
-    settings.current_origin_latitude != null &&
-    settings.current_origin_longitude != null;
+    hasCoordinates;
 
   if (hasCurrentOrigin) {
     return {
