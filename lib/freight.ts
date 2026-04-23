@@ -149,6 +149,43 @@ async function geocodeByQuery(query: string) {
   }
 }
 
+async function geocodeByPostalCode(postalCode: string) {
+  const normalized = sanitizePostalCode(postalCode);
+  if (!normalized) return null;
+
+  const formatted = normalized.length === 8 ? `${normalized.slice(0, 5)}-${normalized.slice(5)}` : normalized;
+  const candidates = [
+    `${formatted}, Brasil`,
+    `${normalized}, Brasil`,
+    `CEP ${formatted}, Brasil`
+  ];
+
+  for (const query of candidates) {
+    const geocoded = await geocodeByQuery(query);
+    if (geocoded) return geocoded;
+  }
+
+  // Fallback: tenta enriquecer pelo ViaCEP para melhorar geocodificação em CEPs pouco indexados no Nominatim
+  try {
+    const viaCep = await fetchJsonWithTimeout(`https://viacep.com.br/ws/${normalized}/json/`, 8000, 1);
+    if (!viaCep?.erro) {
+      const broadAddress = [viaCep.localidade, viaCep.uf, 'Brasil'].filter(Boolean).join(', ');
+      const broadResult = await geocodeByQuery(broadAddress);
+      if (broadResult) return broadResult;
+
+      const specificAddress = [viaCep.logradouro, viaCep.bairro, viaCep.localidade, viaCep.uf, 'Brasil']
+        .filter(Boolean)
+        .join(', ');
+      const specificResult = await geocodeByQuery(specificAddress);
+      if (specificResult) return specificResult;
+    }
+  } catch {
+    // mantém fallback seguro para frete sem interromper checkout
+  }
+
+  return null;
+}
+
 export async function resolveFreightOrigin(settings: FreightSettings) {
   const hasCurrentOrigin =
     settings.delivery_origin_mode === 'current_location' &&
@@ -165,7 +202,7 @@ export async function resolveFreightOrigin(settings: FreightSettings) {
   const storePostalCode = sanitizePostalCode(settings.store_postal_code);
   if (!storePostalCode) return null;
 
-  return geocodeByQuery(`${storePostalCode}, Brasil`);
+  return geocodeByPostalCode(storePostalCode);
 }
 
 export async function resolveDestinationCoordinates(destination: FreightDestination) {
@@ -184,7 +221,12 @@ export async function resolveDestinationCoordinates(destination: FreightDestinat
   }
 
   if (postalCode) {
-    const fromPostalCode = await geocodeByQuery(`${postalCode}, Brasil`);
+    const fromPostalCode = await geocodeByPostalCode(postalCode);
+    if (fromPostalCode) return fromPostalCode;
+  }
+
+  return null;
+}
     if (fromPostalCode) return fromPostalCode;
   }
 
