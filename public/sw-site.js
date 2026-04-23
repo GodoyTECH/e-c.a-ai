@@ -1,5 +1,5 @@
-const CACHE_NAME = 'refrescando-site-v1';
-const APP_SHELL = ['/', '/checkout', '/manifest.webmanifest'];
+const CACHE_NAME = 'refrescando-site-v2';
+const APP_SHELL = ['/', '/checkout', '/manifest.webmanifest', '/icons/site-icon-192.svg', '/icons/site-icon-512.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));

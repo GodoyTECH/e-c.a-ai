@@ -11,9 +11,9 @@ export const metadata = {
   description: 'Cardápio digital com checkout e painel admin',
   manifest: '/manifest.webmanifest',
   icons: {
-    icon: '/logo.png',
-    apple: '/logo.png',
-    shortcut: '/logo.png'
+    icon: '/icons/site-icon-192.svg',
+    apple: '/icons/site-icon-192.svg',
+    shortcut: '/icons/site-icon-512.svg'
   },
   openGraph: {
     title: 'Refrescando',

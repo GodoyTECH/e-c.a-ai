@@ -11,7 +11,7 @@ export function SwRegister() {
 
     const isAdmin = pathname.startsWith('/admin');
     const script = isAdmin ? '/sw-admin.js' : '/sw-site.js';
-    const scope = isAdmin ? '/admin' : '/';
+    const scope = isAdmin ? '/admin/' : '/';
 
     navigator.serviceWorker
       .register(script, { scope })
