@@ -6,8 +6,8 @@ export const metadata: Metadata = {
   title: 'Painel Admin | Refrescando',
   manifest: '/admin/manifest.webmanifest',
   icons: {
-    icon: '/logo.png',
-    apple: '/logo.png'
+    icon: '/icons/admin-icon-192.svg',
+    apple: '/icons/admin-icon-192.svg'
   }
 };
 

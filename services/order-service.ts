@@ -2,12 +2,33 @@ import { ensureDbSchema, getDb } from '@/lib/db';
 import { gerarMensagemPedido } from '@/lib/formatOrderMessage';
 import { gerarLinkWhatsApp } from '@/lib/whatsapp';
 import { CheckoutPayload } from '@/types/order';
+import { estimateFreightFromInput, sanitizePostalCode } from '@/lib/freight';
+import { getStoreSettings } from '@/services/product-service';
 
 const DEFAULT_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://refrescando.netlify.app/';
 
 export async function createOrder(payload: CheckoutPayload, idempotencyKey?: string) {
   const subtotal = payload.items.reduce((acc, item) => acc + item.priceCents * item.quantity, 0);
-  const freightCents = Math.max(0, payload.freightCents || 0);
+
+  const settingsForFreight = await getStoreSettings();
+  let freightCents = Math.max(0, payload.freightCents || 0);
+
+  if (payload.orderType === 'delivery') {
+    try {
+      const quote = await estimateFreightFromInput(settingsForFreight, {
+        postalCode: sanitizePostalCode(payload.postalCode),
+        fullAddress: payload.address || null,
+        latitude: payload.customerLatitude ?? null,
+        longitude: payload.customerLongitude ?? null
+      });
+      freightCents = Math.max(0, quote.cents);
+    } catch {
+      freightCents = Math.max(0, payload.freightCents || 0);
+    }
+  } else {
+    freightCents = 0;
+  }
+
   const totalCents = subtotal + freightCents;
 
   if (!process.env.DATABASE_URL) {

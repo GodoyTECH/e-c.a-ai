@@ -1,5 +1,5 @@
-const CACHE_NAME = 'refrescando-admin-v1';
-const APP_SHELL = ['/admin', '/admin/manifest.webmanifest'];
+const CACHE_NAME = 'refrescando-admin-v2';
+const APP_SHELL = ['/admin/', '/admin/login', '/admin/manifest.webmanifest', '/icons/admin-icon-192.svg', '/icons/admin-icon-512.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
@@ -17,5 +17,5 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(fetch(event.request).catch(() => caches.match(event.request).then((cached) => cached || caches.match('/admin'))));
+  event.respondWith(fetch(event.request).catch(() => caches.match(event.request).then((cached) => cached || caches.match('/admin/'))));
 });

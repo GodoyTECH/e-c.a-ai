@@ -139,6 +139,33 @@ ${siteUrl}`;
     }));
   }
 
+
+  async function shareMarketingMessage() {
+    const text = marketingMessage.trim() || defaultMarketingMessage;
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ text });
+        return;
+      } catch {
+        // fallback below when share modal is canceled or unsupported by host app
+      }
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(text);
+        alert('Mensagem copiada! Cole em qualquer aplicativo para compartilhar.');
+        return;
+      } catch {
+        // fallback below
+      }
+    }
+
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+  }
+
   async function onSave() {
     setLoading(true);
     const freightPerKm = parseFreightValue(form.freight_per_km_brl);
@@ -269,6 +296,14 @@ ${siteUrl}`;
           }}
           placeholder="Escreva a mensagem de divulgação"
         />
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn-primary" onClick={shareMarketingMessage}>
+            Compartilhar mensagem
+          </button>
+          <button type="button" className="btn-secondary" onClick={() => setMarketingMessage(defaultMarketingMessage)}>
+            Restaurar mensagem padrão
+          </button>
+        </div>
       </section>
     </main>
   );
