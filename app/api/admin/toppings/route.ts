@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdminAuthenticated } from '@/lib/auth';
-import { listToppings, seedDefaultToppings, upsertTopping } from '@/services/product-service';
+import { deleteTopping, listToppings, seedDefaultToppings, upsertTopping } from '@/services/product-service';
 
 function parsePriceToCents(value: unknown) {
   if (typeof value === 'number') return Math.max(0, Math.round(value));
@@ -65,5 +65,18 @@ export async function PATCH(request: NextRequest) {
     sort_order: Number.isFinite(Number(body.sort_order)) ? Number(body.sort_order) : 0,
     archived: typeof body.archived === 'boolean' ? body.archived : false
   });
+  return NextResponse.json({ ok: true });
+}
+
+
+export async function DELETE(request: NextRequest) {
+  if (!(await isAdminAuthenticated())) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  }
+
+  const id = request.nextUrl.searchParams.get('id');
+  if (!id) return NextResponse.json({ error: 'id obrigatório' }, { status: 400 });
+
+  await deleteTopping(id);
   return NextResponse.json({ ok: true });
 }
