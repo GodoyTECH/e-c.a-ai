@@ -173,7 +173,7 @@ export function Storefront({
                 height={168}
                 className="h-20 w-20 rounded-3xl object-cover shadow-2xl shadow-black/20 sm:h-24 sm:w-24 md:h-28 md:w-28"
               />
-              <BrClock className="border-white/30 bg-black/20 text-white [&>p]:text-white" />
+              <BrClock className="hidden border-white/30 bg-black/20 text-white [&>p]:text-white sm:block" />
             </div>
             <p className="max-w-2xl text-2xl font-black leading-[1.1] tracking-tight sm:text-3xl md:text-5xl">
               Açaí premium do seu jeito, entregue rápido.
@@ -186,6 +186,10 @@ export function Storefront({
           </div>
         </div>
       </section>
+
+      <div className="fixed left-1/2 top-16 z-30 -translate-x-1/2 sm:hidden">
+        <BrClock compact className="border-white/40 bg-black/35 px-3 py-1 text-white shadow-lg backdrop-blur [&>p]:text-white" />
+      </div>
 
       <section className="mb-6 flex gap-2 overflow-x-auto">
         <button className="btn-secondary" onClick={() => setSelectedCategory('all')}>Todos</button>
@@ -305,7 +309,7 @@ export function Storefront({
         </div>
       )}
 
-      <Link href="/checkout" className="fixed right-4 top-4 z-40 rounded-full bg-acai px-5 py-3 text-sm font-bold text-white shadow-xl md:right-8 md:top-6 md:text-base">
+      <Link href="/checkout" className="fixed right-4 top-28 z-40 rounded-full bg-acai px-5 py-3 text-sm font-bold text-white shadow-xl md:right-8 md:top-6 md:text-base">
         Carrinho ({items.reduce((acc, i) => acc + i.quantity, 0)}) · {currencyBRL(totalCents)}
       </Link>
     </main>
