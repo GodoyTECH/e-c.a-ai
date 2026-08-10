@@ -154,6 +154,19 @@ export function Storefront({
 
   return (
     <main className="mx-auto max-w-6xl p-4 md:p-8">
+      {/* Horário de Brasília & Status fora da Imagem */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/90 px-4 py-2.5 shadow-sm backdrop-blur sm:px-6">
+        <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-700">
+          <span className="relative flex h-3 w-3">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500"></span>
+          </span>
+          Loja Aberta • Entregas em Tempo Real
+        </div>
+        <BrClock />
+      </div>
+
+      {/* Banner Principal com Layout Responsivo Sem Sobreposição do Relógio */}
       <section className="mb-6 overflow-hidden rounded-3xl border border-white/30 bg-gradient-to-br from-acai via-purple-700 to-fuchsia-700 shadow-xl shadow-purple-500/20">
         <div className="relative">
           <div className="absolute inset-0">
@@ -164,8 +177,8 @@ export function Storefront({
             )}
           </div>
           <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[42%] bg-gradient-to-l from-white/15 to-transparent md:block" />
-          <div className="relative z-10 grid gap-5 px-6 py-8 text-white sm:px-8 sm:py-10 md:px-10 md:py-12">
-            <div className="flex items-start justify-between gap-3">
+          <div className="relative z-10 grid gap-4 px-6 py-8 text-white sm:px-8 sm:py-10 md:px-10 md:py-12">
+            <div className="flex items-center gap-4">
               <Image
                 src="/logo.png"
                 alt="Logo da loja"
@@ -173,7 +186,6 @@ export function Storefront({
                 height={168}
                 className="h-20 w-20 rounded-3xl object-cover shadow-2xl shadow-black/20 sm:h-24 sm:w-24 md:h-28 md:w-28"
               />
-              <BrClock className="hidden border-white/30 bg-black/20 text-white [&>p]:text-white sm:block" />
             </div>
             <p className="max-w-2xl text-2xl font-black leading-[1.1] tracking-tight sm:text-3xl md:text-5xl">
               Açaí premium do seu jeito, entregue rápido.
@@ -187,20 +199,27 @@ export function Storefront({
         </div>
       </section>
 
-      <div className="fixed left-1/2 top-16 z-30 -translate-x-1/2 sm:hidden">
-        <BrClock compact className="border-white/40 bg-black/35 px-3 py-1 text-white shadow-lg backdrop-blur [&>p]:text-white" />
-      </div>
-
-      <section className="mb-6 flex gap-2 overflow-x-auto">
-        <button className="btn-secondary" onClick={() => setSelectedCategory('all')}>Todos</button>
+      {/* Navegação de Categorias */}
+      <section className="mb-6 flex gap-2 overflow-x-auto pb-1">
+        <button
+          className={`btn-secondary text-sm ${selectedCategory === 'all' ? 'bg-acai text-white border-acai' : ''}`}
+          onClick={() => setSelectedCategory('all')}
+        >
+          Todos os Produtos
+        </button>
         {categories.map((cat) => (
-          <button key={cat.id} className="btn-secondary" onClick={() => setSelectedCategory(cat.id)}>
+          <button
+            key={cat.id}
+            className={`btn-secondary text-sm ${selectedCategory === cat.id ? 'bg-acai text-white border-acai' : ''}`}
+            onClick={() => setSelectedCategory(cat.id)}
+          >
             {cat.name}
           </button>
         ))}
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {/* Grid de Produtos Responsiva */}
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map((product) => {
           const activeSizes = (product.sizes || []).filter((item) => item.active);
           const minimumPrice = activeSizes.length
@@ -208,11 +227,13 @@ export function Storefront({
             : product.price_cents;
 
           return (
-            <article key={product.id} className="card glass-card border border-white/40">
-              <div className="mb-3 h-44 rounded-xl bg-slate-100 bg-cover bg-center" style={{ backgroundImage: `url(${product.main_image_url})` }} />
-              <h3 className="font-semibold">{product.name}</h3>
-              <p className="mt-1 text-sm text-slate-600">{product.description}</p>
-              <div className="mt-3 flex items-center justify-between">
+            <article key={product.id} className="card glass-card flex flex-col justify-between border border-white/40">
+              <div>
+                <div className="mb-3 h-44 rounded-xl bg-slate-100 bg-cover bg-center" style={{ backgroundImage: `url(${product.main_image_url})` }} />
+                <h3 className="font-semibold text-slate-800">{product.name}</h3>
+                <p className="mt-1 text-sm text-slate-600">{product.description}</p>
+              </div>
+              <div className="mt-4 flex items-center justify-between">
                 <span className="text-lg font-bold text-acai">A partir de {currencyBRL(minimumPrice)}</span>
                 <button className="btn-primary" onClick={() => handleProductClick(product)}>Adicionar</button>
               </div>
@@ -220,98 +241,6 @@ export function Storefront({
           );
         })}
       </section>
-
-      {selectedProduct && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
-          <div className="max-h-[95vh] w-full max-w-md overflow-auto rounded-2xl bg-white p-4 shadow-xl">
-            <h2 className="text-lg font-bold">Personalizar pedido</h2>
-            <p className="text-sm text-slate-600">{selectedProduct.name}</p>
-
-            <section className="mt-4 space-y-2 rounded-xl border p-3">
-              <h3 className="font-semibold">1) Escolha o tamanho</h3>
-              {(selectedProduct.sizes || [])
-                .filter((size) => size.active)
-                .map((size) => (
-                  <label key={size.id} className="flex cursor-pointer items-center justify-between rounded-xl border px-3 py-2">
-                    <div>
-                      <p className="font-medium">{size.label}</p>
-                      <p className="text-xs text-slate-500">{size.volume_ml}ml</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-semibold text-acai">{currencyBRL(size.price_cents)}</span>
-                      <input type="radio" name="size" checked={selectedSizeId === size.id} onChange={() => setSelectedSizeId(size.id)} />
-                    </div>
-                  </label>
-                ))}
-            </section>
-
-            <section className="mt-3 space-y-2 rounded-xl border p-3">
-              <h3 className="font-semibold">2) Inclusos no produto</h3>
-              {includedToppings.length > 0 ? (
-                <div className="space-y-2">
-                  {includedToppings.map((item) => {
-                    const removed = removedIncludedIds.includes(item.topping_id);
-
-                    return (
-                      <div key={item.topping_id} className="flex items-center justify-between rounded-xl border px-3 py-2">
-                        <span className={removed ? 'text-sm text-slate-400 line-through' : 'text-sm text-slate-700'}>{item.name}</span>
-                        <button type="button" className="btn-secondary" onClick={() => toggleIncludedTopping(item.topping_id)}>
-                          {removed ? 'Restaurar' : 'Excluir'}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500">Sem inclusos padrão.</p>
-              )}
-            </section>
-
-            <section className="mt-3 space-y-2 rounded-xl border p-3">
-              <h3 className="font-semibold">3) Adicionais opcionais</h3>
-              <div className="grid grid-cols-1 gap-2">
-                {optionalToppings.map((topping) => (
-                  <div key={topping.topping_id} className="flex items-center justify-between rounded-xl border px-3 py-2">
-                    <span>{topping.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-acai">+ {currencyBRL(topping.price_cents)}</span>
-                      <button
-                        type="button"
-                        className="btn-secondary px-3 py-1"
-                        onClick={() => updateOptionalQuantity(topping.topping_id, (optionalQuantities[topping.topping_id] || 0) - 1)}
-                        disabled={(optionalQuantities[topping.topping_id] || 0) <= 0 || removedIncludedIds.includes(topping.topping_id)}
-                      >
-                        -
-                      </button>
-                      <span className="w-6 text-center text-sm font-medium">{optionalQuantities[topping.topping_id] || 0}</span>
-                      <button
-                        type="button"
-                        className="btn-secondary px-3 py-1"
-                        onClick={() => updateOptionalQuantity(topping.topping_id, (optionalQuantities[topping.topping_id] || 0) + 1)}
-                        disabled={removedIncludedIds.includes(topping.topping_id)}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {optionalToppings.length === 0 && <p className="text-sm text-slate-500">Sem adicionais ativos no momento.</p>}
-              </div>
-            </section>
-
-            <p className="mt-4 text-lg font-bold">Subtotal do item: {currencyBRL(selectedPrice)}</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button className="btn-primary" onClick={addSelectedToCart} disabled={!selectedSize}>Adicionar ao carrinho</button>
-              <button className="btn-secondary" onClick={directCheckout} disabled={!selectedSize}>Finalizar direto</button>
-              <button className="btn-secondary" onClick={() => setSelectedProduct(null)}>Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <Link href="/checkout" className="fixed right-4 top-28 z-40 rounded-full bg-acai px-5 py-3 text-sm font-bold text-white shadow-xl md:right-8 md:top-6 md:text-base">
-        Carrinho ({items.reduce((acc, i) => acc + i.quantity, 0)}) · {currencyBRL(totalCents)}
-      </Link>
     </main>
   );
 }
